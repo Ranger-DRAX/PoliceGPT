@@ -1,0 +1,20 @@
+# Embedding Model Configuration
+model:
+  name: "BAAI/bge-m3"
+  max_seq_length: 8192
+  normalize_embeddings: true
+  use_fp16: true
+
+inference:
+  batch_size: 32
+  device: "auto" # "cuda", "cpu", "mps", "auto"
+  num_workers: 4
+
+embedding_types:
+  dense: true
+  sparse: true # BGE-M3 lexical weights
+  colbert_multivector: false
+
+output:
+  processed_dir: "data/processed"
+  dense_dim: 1024

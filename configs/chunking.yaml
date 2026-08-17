@@ -1,0 +1,25 @@
+# Legal Structure-Aware Chunking Configuration
+strategy: "section_aware" # section_aware, recursive, hybrid
+
+target_chunk_size: 512       # in tokens / characters
+chunk_overlap: 64           # overlap token / character count
+min_chunk_size: 100         # prevent micro chunks
+
+# Legal Section / Dhara boundary regex patterns
+patterns:
+  bengali_section: "(?:ধারা\\s+[০-৯0-9]+|দণ্ডবিধি\\s+[০-৯0-9]+|অনুচ্ছেদ\\s+[০-৯0-9]+|বিধি\\s+[০-৯0-9]+)"
+  english_section: "(?:Section\\s+\\d+[A-Za-z]?|Rule\\s+\\d+|Article\\s+\\d+|Order\\s+[IVXLCDM\\d]+)"
+  sub_clause: "(?:\\([ক-হa-z0-9]+\\)|\\[[ক-হa-z0-9]+\\])"
+
+metadata_fields:
+  - "doc_id"
+  - "act_name_bn"
+  - "act_name_en"
+  - "act_year"
+  - "chapter"
+  - "section_number"
+  - "section_title"
+  - "jurisdiction"
+  - "source_file"
+  - "page_numbers"
+  - "chunk_id"

@@ -1,0 +1,22 @@
+# Ingestion Configuration
+parser:
+  primary: "pymupdf" # pymupdf, pdfplumber, docling, marker
+  extract_images: false
+  extract_tables: true
+
+quality_check:
+  min_text_length_per_page: 50
+  min_bangla_unicode_ratio: 0.15 # Ratio of Bengali unicode characters if document is Bengali
+  min_valid_char_ratio: 0.80     # Valid alphanumeric + punctuation vs gibberish/corrupt font glyphs
+  density_threshold: 0.05
+
+ocr:
+  engine: "easyocr" # easyocr, paddleocr, tesseract
+  languages: ["bn", "en"]
+  gpu: true
+  dpi: 300
+  confidence_threshold: 0.65
+
+paths:
+  raw_dir: "data/raw"
+  interim_dir: "data/interim"

@@ -1,0 +1,43 @@
+# Python & Environment
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv/
+
+# Environment Variables
+.env
+.env.local
+
+# IDE & Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Project Data Directories (keep structure with .gitkeep, exclude heavy datasets)
+data/raw/*
+!data/raw/**/.gitkeep
+data/interim/*
+!data/interim/.gitkeep
+data/processed/*
+!data/processed/.gitkeep
+
+# Checkpoints & Artifacts
+checkpoints/
+models/
+indices/*.faiss
+indices/*.bin
+logs/
+*.log
+
+# Evaluation outputs
+eval_results/
+wandb/
+.pytest_cache/
+.coverage
+htmlcov/

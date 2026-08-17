@@ -1,0 +1,24 @@
+# LLM Generation & Legal Guardrails Configuration
+model:
+  provider: "ollama" # ollama, openai, vllm, huggingface
+  name: "qwen2.5:7b"
+  temperature: 0.1
+  top_p: 0.95
+  max_tokens: 1024
+  timeout: 60
+
+prompts:
+  default_language: "bn" # "bn" for Bengali, "en" for English, "auto" for query-matching
+  require_citations: true
+  grounding_strictness: "strict" # strict, moderate, permissive
+  system_prompt_version: "v1.2"
+
+guardrails:
+  hallucination_check: true
+  out_of_scope_rejection: true
+  legal_disclaimer: true
+  min_citation_count: 1
+  blocked_intents:
+    - "unlawful_advice"
+    - "evidence_tampering"
+    - "system_prompt_leak"
