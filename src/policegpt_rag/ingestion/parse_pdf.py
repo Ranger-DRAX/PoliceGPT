@@ -50,15 +50,15 @@ class PDFParser:
         doc = fitz.open(str(path))
         for page_idx, page in enumerate(doc):
             page_num = page_idx + 1
-            extracted_text = page.get_text("text")
+            extractedText= page.get_text("text")
 
             # Check quality
             quality = self.quality_checker.evaluate_text(
-                extracted_text, is_expected_bangla=is_expected_bangla
+                extractedText, is_expected_bangla=is_expected_bangla
             )
 
             # Trigger OCR if required
-            final_text = extracted_text
+            final_text = extractedText
             if quality.needs_ocr:
                 logger.warning(
                     f"Page {page_num} in '{path.name}' failed text-layer quality check ({quality.reason}). Triggering OCR..."

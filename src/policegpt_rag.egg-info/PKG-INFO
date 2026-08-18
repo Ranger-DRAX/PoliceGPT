@@ -1,3 +1,43 @@
+Metadata-Version: 2.4
+Name: policegpt-rag
+Version: 0.1.0
+Summary: Specialized Multilingual Legal RAG for Bangladesh Police Regulations & Laws
+Author: PoliceGPT Team
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+Requires-Dist: pydantic>=2.5.0
+Requires-Dist: pydantic-settings>=2.1.0
+Requires-Dist: pyyaml>=6.0.1
+Requires-Dist: torch>=2.1.0
+Requires-Dist: transformers>=4.38.0
+Requires-Dist: sentence-transformers>=2.6.0
+Requires-Dist: accelerate>=0.28.0
+Requires-Dist: qdrant-client>=1.8.0
+Requires-Dist: faiss-cpu>=1.8.0
+Requires-Dist: fastapi>=0.110.0
+Requires-Dist: uvicorn[standard]>=0.28.0
+Requires-Dist: pandas>=2.2.0
+Requires-Dist: pyarrow>=15.0.0
+Requires-Dist: tqdm>=4.66.0
+Requires-Dist: requests>=2.31.0
+Requires-Dist: httpx>=0.27.0
+Requires-Dist: python-dotenv>=1.0.1
+Requires-Dist: loguru>=0.7.2
+Requires-Dist: rich>=13.7.0
+Provides-Extra: ocr
+Requires-Dist: easyocr>=1.7.1; extra == "ocr"
+Requires-Dist: paddleocr>=2.7.0; extra == "ocr"
+Requires-Dist: pdfplumber>=0.10.3; extra == "ocr"
+Requires-Dist: pymupdf>=1.23.0; extra == "ocr"
+Provides-Extra: eval
+Requires-Dist: ragas>=0.1.0; extra == "eval"
+Requires-Dist: scikit-learn>=1.4.0; extra == "eval"
+Provides-Extra: dev
+Requires-Dist: pytest>=8.0.0; extra == "dev"
+Requires-Dist: pytest-asyncio>=0.23.0; extra == "dev"
+Requires-Dist: black>=24.2.0; extra == "dev"
+Requires-Dist: ruff>=0.3.0; extra == "dev"
+
 # PoliceGPT RAG (Retrieval-Augmented Generation)
 
 A specialized multilingual (Bengali & English) legal RAG pipeline tailored for Bangladesh Police regulations, penal codes, criminal procedures, special acts, and citizen complaint workflows.
@@ -123,80 +163,3 @@ python scripts/demo_query.py --query "পেনাল কোড অনুযা�
 # Launch FastAPI Server
 uvicorn api.main:app --reload --port 8000
 ```
-
----
-
-## 🛠️ Testing & CLI Reference Guide
-
-### 1. Document Ingestion & Chunking (`scripts/run_ingestion.py`)
-
-*   **Process both default PDFs (`policeAct` & `policeRegulations`):**
-    ```bash
-    python scripts/run_ingestion.py
-    ```
-*   **Process only the Police Act, 1861:**
-    ```bash
-    python scripts/run_ingestion.py --doc policeAct
-    ```
-*   **Process only the Police Regulations of Bengal:**
-    ```bash
-    python scripts/run_ingestion.py --doc policeRegulations
-    ```
-*   **Inspect chunk outputs (e.g., first 10 chunks):**
-    ```bash
-    python scripts/run_ingestion.py --doc policeAct --inspect 10
-    ```
-*   **Save chunks & generate quality report JSON:**
-    ```bash
-    python scripts/run_ingestion.py --all --save-chunks --report
-    ```
-*   **Process an arbitrary PDF path:**
-    ```bash
-    python scripts/run_ingestion.py --pdf data/Police_Law/policeAct.pdf --inspect 5
-    ```
-
-### 2. Automated Unit Tests (`pytest`)
-
-*   **Run all tests:**
-    ```bash
-    pytest -v
-    ```
-*   **Run chunker tests:**
-    ```bash
-    pytest tests/test_chunker.py -v
-    ```
-*   **Run quality check & OCR fallback tests:**
-    ```bash
-    pytest tests/test_quality_check.py -v
-    ```
-*   **Run legal guardrail tests:**
-    ```bash
-    pytest tests/test_guardrails.py -v
-    ```
-*   **Run FAISS & hybrid search retriever tests:**
-    ```bash
-    pytest tests/test_retrieval.py -v
-    ```
-
-### 3. Vector Indexing (`scripts/build_index.py`)
-
-*   **Build Local FAISS Index:**
-    ```bash
-    python scripts/build_index.py
-    ```
-*   **Build Qdrant Index:**
-    ```bash
-    python scripts/build_index.py --use-qdrant
-    ```
-
-### 4. Interactive Query CLI (`scripts/demo_query.py`)
-
-*   **Bengali Query:**
-    ```bash
-    python scripts/demo_query.py --query "পেনাল কোড অনুযায়ী চুরির শাস্তি কী?" --lang bn
-    ```
-*   **English Query:**
-    ```bash
-    python scripts/demo_query.py --query "What is the procedure for filing a GD?" --lang en
-    ```
-
