@@ -20,10 +20,10 @@ ENV/
 *.swo
 
 # Project Data Directories (keep structure with .gitkeep, exclude heavy datasets)
-data/raw/*
-!data/raw/**/.gitkeep
-data/interim/*
-!data/interim/.gitkeep
+# data/raw/*
+# !data/raw/**/.gitkeep
+# data/interim/*
+# !data/interim/.gitkeep
 data/processed/*
 !data/processed/.gitkeep
 
