@@ -1,4 +1,10 @@
-# PoliceGPT — Legal Document Ingestion & Chunking Dependencies
+# PoliceGPT — Legal Document Ingestion, Chunking & Embedding Dependencies
+# Hardware Target: Intel i3 6th Gen / NVIDIA GTX 1050 Ti (4GB VRAM) / 8GB RAM
+
+# PyTorch with CUDA 11.8 Support (Pascal sm_61 compatible)
+--extra-index-url https://download.pytorch.org/whl/cu118
+torch>=2.1.0
+torchvision>=0.16.0
 
 # Document Ingestion & PDF Parsing
 pymupdf>=1.23.0
@@ -16,6 +22,10 @@ python-dotenv>=1.0.1
 # OCR Fallback Engine (Tesseract 5 CPU-only)
 pytesseract>=0.3.10
 pillow>=10.0.0
+
+# Embedding Model (BGE-M3 Dense & Sparse Hybrid)
+FlagEmbedding>=1.2.0
+pyarrow>=15.0.0
 
 # Testing & Dev Tools
 pytest>=8.0.0

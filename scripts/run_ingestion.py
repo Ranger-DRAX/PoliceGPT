@@ -136,7 +136,10 @@ def run_pipeline(
     # ── Step 1: Extract + quality check ────────────────────────────────────
     console.print("\n[bold yellow][1] PyMuPDF Extraction + Quality Detection[/bold yellow]")
 
-    import fitz  # PyMuPDF
+    try:
+        import pymupdf as fitz
+    except ImportError:
+        import fitz
 
     doc = fitz.open(str(pdf_path))
     total_pages = len(doc)

@@ -4,7 +4,10 @@ PDF parsing module with PyMuPDF / pdfplumber integration, quality checks, and OC
 
 from typing import List, Dict, Any, Optional
 from pathlib import Path
-import fitz  # PyMuPDF
+try:
+    import pymupdf as fitz
+except ImportError:
+    import fitz
 from loguru import logger
 
 from .quality_check import DocumentQualityChecker, QualityCheckResult

@@ -1,2 +1,16 @@
-# Embedding configuration placeholder
-# Embedding generation is decoupled from this repository (repository is scoped exclusively to Document Chunking).
+# BGE-M3 Multilingual Embedding Configuration (PoliceGPT)
+# Optimized for 4GB VRAM / 8GB System RAM (Intel i3 6th Gen / GTX 1050 Ti)
+
+model_name: "BAAI/bge-m3"
+device: "cuda"          # falls back to "cpu" automatically if CUDA unavailable
+use_fp16: true          # forced false if running on CPU
+batch_size: 4           # small batch size to stay within 4GB VRAM activation limits
+max_length: 512         # token truncation length, aligned with chunking target_chunk_size
+return_dense: true      # 1024-dim dense vectors for FAISS semantic retrieval
+return_sparse: true     # lexical term weights for hybrid BM25-like search
+return_colbert_vecs: false   # multi-vector ColBERT representation (disabled to save VRAM/disk)
+normalize_embeddings: true
+
+paths:
+  input_dir: "data/processed"
+  output_dir: "data/processed/embeddings"

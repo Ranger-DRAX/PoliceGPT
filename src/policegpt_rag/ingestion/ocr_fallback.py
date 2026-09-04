@@ -206,7 +206,10 @@ class OCRFallbackEngine:
         pipeline dependency, so no extra system package like poppler is needed).
         Use this to feed a specific low-quality page straight into ocr_image_or_page().
         """
-        import fitz  # PyMuPDF
+        try:
+            import pymupdf as fitz
+        except ImportError:
+            import fitz
         from PIL import Image
 
         doc = fitz.open(str(pdf_path))

@@ -68,6 +68,9 @@ def test_ocr_unavailable_graceful_fallback():
     assert engine.is_available is False
 
 
+import sys
+
+
 def test_ocr_successful_extraction_mocked():
     """Mock pytesseract to verify image_to_string execution and output stripping."""
     engine = OCRFallbackEngine(languages=["bn", "en"], psm=6, oem=3)
@@ -80,6 +83,8 @@ def test_ocr_successful_extraction_mocked():
     img.save(buf, format="PNG")
     img_bytes = buf.getvalue()
 
-    with patch("pytesseract.image_to_string", return_value="   বাংলাদেশ পুলিশ আইন ১৮৬১   \n"):
+    mock_pytess = MagicMock()
+    mock_pytess.image_to_string.return_value = "   বাংলাদেশ পুলিশ আইন ১৮৬১   \n"
+    with patch.dict(sys.modules, {"pytesseract": mock_pytess}):
         text = engine.ocr_image_or_page(img_bytes)
         assert text == "বাংলাদেশ পুলিশ আইন ১৮৬১"
