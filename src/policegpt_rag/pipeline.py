@@ -41,9 +41,9 @@ class PoliceGPTChunkingPipeline:
         min_chunk_size: int = 100,
         min_text_length_per_page: int = 50,
         min_bangla_unicode_ratio: float = 0.15,
-        min_valid_char_ratio: float = 0.80,
-        ocr_engine: str = "easyocr",
+        ocr_engine: str = "tesseract",
         use_gpu: bool = False,
+        ocr_languages: Optional[List[str]] = None,
     ):
         logger.info("Initializing PoliceGPT Document Chunking Pipeline...")
 
@@ -53,7 +53,11 @@ class PoliceGPTChunkingPipeline:
             min_bangla_unicode_ratio=min_bangla_unicode_ratio,
             min_valid_char_ratio=min_valid_char_ratio,
         )
-        self.ocr_engine = OCRFallbackEngine(engine=ocr_engine, use_gpu=use_gpu)
+        self.ocr_engine = OCRFallbackEngine(
+            languages=ocr_languages or ["bn", "en"],
+            engine=ocr_engine,
+            use_gpu=use_gpu,
+        )
         self.pdf_parser = PDFParser(
             quality_checker=self.quality_checker,
             ocr_engine=self.ocr_engine,

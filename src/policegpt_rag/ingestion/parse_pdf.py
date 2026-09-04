@@ -59,20 +59,31 @@ class PDFParser:
 
             # Trigger OCR if required
             final_text = extractedText
+            ocr_attempted = False
+            ocr_recovered = False
+            ocr_chars = 0
+
             if quality.needs_ocr:
                 logger.warning(
                     f"Page {page_num} in '{path.name}' failed text-layer quality check ({quality.reason}). Triggering OCR..."
                 )
-                pix = page.get_pixmap(dpi=200)
+                ocr_attempted = True
+                dpi = getattr(self.ocr_engine, "dpi", 300)
+                pix = page.get_pixmap(dpi=dpi)
                 img_bytes = pix.tobytes("png")
                 ocr_text = self.ocr_engine.ocr_image_or_page(img_bytes)
                 if ocr_text.strip():
                     final_text = ocr_text
+                    ocr_recovered = True
+                    ocr_chars = len(ocr_text.strip())
 
             page_meta = {
                 "source_file": path.name,
                 "file_path": str(path.resolve()),
                 "total_pages": len(doc),
+                "ocr_attempted": ocr_attempted,
+                "ocr_recovered": ocr_recovered,
+                "ocr_chars": ocr_chars,
             }
 
             parsed_pages.append(

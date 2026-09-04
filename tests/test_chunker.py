@@ -1,5 +1,5 @@
 import pytest
-from policegpt_rag.preprocessing.chunker import LegalSectionChunker
+from src.policegpt_rag.preprocessing.chunker import LegalSectionChunker
 
 
 def test_section_aware_chunking():

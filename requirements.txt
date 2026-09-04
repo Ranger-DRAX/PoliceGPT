@@ -13,9 +13,9 @@ loguru>=0.7.2
 tqdm>=4.66.0
 python-dotenv>=1.0.1
 
-# Optional OCR Engines (for scanned pages)
-# easyocr>=1.7.1
-# paddleocr>=2.7.0
+# OCR Fallback Engine (Tesseract 5 CPU-only)
+pytesseract>=0.3.10
+pillow>=10.0.0
 
 # Testing & Dev Tools
 pytest>=8.0.0

@@ -11,11 +11,13 @@ quality_check:
   density_threshold: 0.05
 
 ocr:
-  engine: "easyocr" # easyocr, paddleocr, tesseract
+  engine: "tesseract" # Tesseract 5 CPU-only OCR fallback
   languages: ["bn", "en"]
-  gpu: true
   dpi: 300
-  confidence_threshold: 0.65
+  psm: 6
+  oem: 3
+  tesseract_cmd: null # null for auto-discovery (PATH, default Windows dirs, or TESSERACT_CMD)
+  tessdata_dir: null  # null for default system tessdata or TESSDATA_PREFIX
 
 paths:
   raw_dir: "data/raw"

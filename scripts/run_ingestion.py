@@ -125,7 +125,7 @@ def run_pipeline(
         min_bangla_unicode_ratio=0.15,
         min_valid_char_ratio=0.80,
     )
-    ocr_engine = OCRFallbackEngine(engine="easyocr", use_gpu=False)
+    ocr_engine = OCRFallbackEngine(languages=["bn", "en"], dpi=300)
     normalizer = UnicodeNormalizer()
     boilerplate_cleaner = BoilerplateCleaner()
     chunker = LegalSectionChunker(target_chunk_size=512, chunk_overlap=64, min_chunk_size=100)

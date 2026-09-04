@@ -1,5 +1,5 @@
 import pytest
-from policegpt_rag.ingestion.quality_check import DocumentQualityChecker
+from src.policegpt_rag.ingestion.quality_check import DocumentQualityChecker
 
 
 def test_quality_checker_valid_bengali_text():
