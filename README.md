@@ -1,49 +1,53 @@
-# PoliceGPT RAG (Retrieval-Augmented Generation)
+# PoliceGPT — Legal Document Ingestion & Section Chunking
 
-A specialized multilingual (Bengali & English) legal RAG pipeline tailored for Bangladesh Police regulations, penal codes, criminal procedures, special acts, and citizen complaint workflows.
+A specialized multilingual (Bengali & English) legal document processing and structure-aware chunking pipeline tailored for Bangladesh Police regulations, penal codes, criminal procedure, special acts, and regulatory documents.
+
+> **Design Principle:** This repository is focused strictly on the **Document Ingestion & Chunking Layer** (PyMuPDF → Quality Detection → OCR Fallback → Text Cleaning → Legal Structure Detection → Section Chunking). Downstream components (embeddings, vector databases, retrieval, and LLMs) are decoupled to ensure the extraction and chunking quality is robust, verified, and transparent.
 
 ---
 
 ## 🏛️ Pipeline Architecture
 
 ```
-[Raw Legal PDFs / Documents]
-       │
-       ▼
-[Ingestion & Docling / Marker Parsing] ──── (Low Quality / Scanned) ──► [OCR Fallback (EasyOCR / PaddleOCR)]
-       │
-       ▼
-[Quality Check & Unicode Normalization (NFC / ZWJ Cleanup)]
-       │
-       ▼
-[Legal Structure-Aware Chunking (Act / Section / Dhara / Sub-clause)]
-       │
-       ▼
-[Metadata Tagging (Act Name, Section No., Year, Jurisdiction, Keywords)]
-       │
-       ▼
-[Multilingual Embedding Extraction (BGE-M3 Dense + Sparse Lexical)]
-       │
-       ▼
-[Hybrid Vector Index (Qdrant / Local FAISS)]
-       │
-       ▼
-[Hybrid Retrieval (Dense Semantic + Sparse BM25 / Lexical Fusion)]
-       │
-       ▼
-[Cross-Encoder Reranking (BGE-Reranker-v2-M3)]
-       │
-       ▼
-[Guardrails & Context-Grounded Prompting (Mandatory Citation Enforcement)]
-       │
-       ▼
-[LLM Inference (Qwen2.5 / Llama 3.1 / TituLLM / BanglaLLaMA)]
-       │
-       ▼
-[Cited Legal Answer + Confidence + Section References]
-       │
-       ▼
-[Continuous Evaluation & Monitoring (RAGAS, HitRate@k, MRR)]
+[Raw Legal PDFs (Police Act, PRB, Penal Code)]
+                      │
+                      ▼
+              ┌───────────────┐
+              │    PyMuPDF    │
+              └───────┬───────┘
+                      │
+                      ▼
+              Extract Page Text
+                      │
+                      ▼
+           ┌──────────────────────┐
+           │ DocumentQualityCheck │
+           └──────────┬───────────┘
+                      │
+               ┌──────┴──────┐
+              GOOD          POOR / SCANNED / CORRUPT
+               │             │
+               │             ▼
+               │        Render Page Image
+               │             │
+               │             ▼
+               │     OCR Fallback (EasyOCR / PaddleOCR)
+               │             │
+               └──────┬──────┘
+                      ▼
+           Unicode NFC & ZWJ/ZWNJ Normalization
+                      │
+                      ▼
+           Gazette & Header Boilerplate Cleaning
+                      │
+                      ▼
+           Legal Structure Detection (ধারা / Section / বিধি / Rule)
+                      │
+                      ▼
+           Legal Chunking with Rich Metadata
+                      │
+                      ▼
+           CLI Inspection & JSON / Parquet Export
 ```
 
 ---
@@ -51,152 +55,140 @@ A specialized multilingual (Bengali & English) legal RAG pipeline tailored for B
 ## 📂 Project Structure
 
 ```
-policegpt-rag/
-├── README.md
-├── pyproject.toml                  # Packaging and build specification
-├── requirements.txt                # Pip requirements
-├── .env.example                    # API keys, Qdrant host, model paths
-├── .gitignore                      # Git ignore patterns
+Police-GPT/
+├── README.md                       # Project documentation & CLI reference
+├── agent.md                        # Architectural guidelines & processing flow
+├── approach.md                     # Chunker flow summary
+├── pyproject.toml                  # Packaging specification
+├── requirements.txt                # Lightweight chunking dependencies
 │
 ├── configs/
-│   ├── ingestion.yaml              # OCR fallback thresholds, parser choice
-│   ├── chunking.yaml               # Target token size, overlap %, section regex
-│   ├── embedding.yaml              # BGE-M3 params, batch size, device
-│   ├── retrieval.yaml              # Top-k, rerank top-n, hybrid fusion weights
-│   └── generation.yaml             # Base model, prompt version, temperature
+│   ├── ingestion.yaml              # PDF parser, quality thresholds, OCR settings
+│   └── chunking.yaml               # Target chunk size, overlap %, legal regex patterns
 │
 ├── data/
-│   ├── raw/                        # Source PDFs (BD Laws, PRB 1943, FAQs, Synthetic)
-│   ├── interim/                    # Parsed text pre-cleaning (per-doc JSON)
-│   ├── processed/                  # Final chunks + metadata (parquet/jsonl)
-│   └── eval/                       # Benchmark sets for retrieval & QA
+│   ├── Police_Law/                 # Source statutes (Police Act 1861, PRB 1943, Penal Code 1860)
+│   └── processed/                  # Generated chunk JSONs and quality reports
 │
 ├── src/policegpt_rag/
-│   ├── ingestion/                  # Docling/Marker parsing & OCR fallback
-│   ├── preprocessing/              # Unicode normalization & Section-aware chunking
-│   ├── embedding/                  # BGE-M3 dense + sparse embeddings
-│   ├── indexing/                   # FAISS local & Qdrant hybrid vector index
-│   ├── retrieval/                  # Hybrid search fusion & BGE reranker
-│   ├── generation/                 # Prompt templates, LLM clients, legal guardrails
-│   ├── evaluation/                 # Retrieval metrics (Recall@k, MRR) & RAGAS
-│   └── pipeline.py                 # End-to-end pipeline orchestrator
+│   ├── ingestion/
+│   │   ├── parse_pdf.py            # Page-by-page extraction with quality gate
+│   │   ├── quality_check.py        # Bengali Unicode density & corrupt font detection
+│   │   └── ocr_fallback.py         # EasyOCR & PaddleOCR fallback engine
+│   │
+│   ├── preprocessing/
+│   │   ├── normalize.py            # NFC normalization, ZWJ/ZWNJ cleanup, digit conversion
+│   │   ├── boilerplate.py          # Bangladesh Gazette & header/footer remover
+│   │   └── chunker.py              # LegalSectionChunker (ধারা/Section boundary chunking)
+│   │
+│   └── pipeline.py                 # Core PoliceGPTChunkingPipeline orchestrator
 │
-├── api/
-│   ├── main.py                     # FastAPI server
-│   ├── routers/query.py            # /query and /retrieve routes
-│   └── schemas.py                  # Pydantic request/response models
+├── scripts/
+│   └── run_ingestion.py            # Rich CLI runner for document chunking & inspection
 │
-├── finetuning/                     # Domain adaptation & QLoRA recipes
-├── scripts/                        # CLI runners for ingestion, indexing, and eval
-├── notebooks/                      # Exploratory notebooks
-└── tests/                          # Automated unit and integration tests
+└── tests/
+    ├── test_chunker.py             # Section-aware chunking tests
+    └── test_quality_check.py       # Quality evaluator & encoding test cases
 ```
 
 ---
 
 ## 🚀 Quick Start
 
-### 1. Setup Environment
+### 1. Environment Setup
+
 ```bash
-cd policegpt-rag
+# Create virtual environment
 python -m venv venv
-# On Windows:
+
+# Activate virtual environment
+# Windows:
 venv\Scripts\activate
-# On Linux/macOS:
+# Linux/macOS:
 source venv/bin/activate
 
+# Install dependencies
 pip install -r requirements.txt
-cp .env.example .env
 ```
 
-### 2. Run Pipeline Steps
+### 2. Run Ingestion & Chunking CLI
+
 ```bash
-# Ingestion: Parse PDFs with quality checking and OCR fallback
+# Process all default law documents
 python scripts/run_ingestion.py
 
-# Chunking, Embedding & Indexing
-python scripts/build_index.py --use-qdrant
+# Process only The Police Act, 1861 and inspect first 5 chunks
+python scripts/run_ingestion.py --doc policeAct --inspect 5
 
-# Test a Query via CLI
-python scripts/demo_query.py --query "পেনাল কোড অনুযায়ী চুরির শাস্তি কী?"
+# Process Police Regulations of Bengal
+python scripts/run_ingestion.py --doc policeRegulations
 
-# Launch FastAPI Server
-uvicorn api.main:app --reload --port 8000
+# Process The Penal Code, 1860
+python scripts/run_ingestion.py --doc penalCode
+
+# Process an arbitrary external PDF
+python scripts/run_ingestion.py --pdf path/to/law_document.pdf --inspect 10
+
+# Save all chunks to JSON and generate a quality report
+python scripts/run_ingestion.py --all --save-chunks --report
+```
+
+Output chunks and quality reports are saved to `data/processed/`:
+* `data/processed/<doc_id>_chunks.json`
+* `data/processed/quality_report.json`
+
+---
+
+## 🛠️ Key Components & Capabilities
+
+### 1. Document Quality Checker (`quality_check.py`)
+Evaluates each extracted page to ensure:
+* **Character Length**: Rejects pages below `min_text_length_per_page=50` (flags scanned pages).
+* **Bengali Unicode Density**: Checks for proper Bengali script (`[\u0980-\u09FF]`). Detects garbled legacy fonts (e.g. Bijoy ASCII encoding errors).
+* **Valid Character Ratio**: Ensures character readability exceeds `min_valid_char_ratio=0.80`.
+* **Automatic OCR Routing**: Automatically triggers OCR fallback when a page fails text layer checks.
+
+### 2. OCR Fallback Engine (`ocr_fallback.py`)
+* Automatically renders page images at 200–300 DPI.
+* Supports **EasyOCR** and **PaddleOCR** with Bengali (`bn`) and English (`en`) support.
+* Falls back gracefully if OCR packages are not locally installed.
+
+### 3. Unicode Normalization & Cleaning (`normalize.py`, `boilerplate.py`)
+* Performs Unicode **NFC** canonical decomposition and composition.
+* Cleans unneeded Zero-Width Joiners (`\u200D`), Zero-Width Non-Joiners (`\u200C`), and BOM characters while preserving valid Bengali conjuncts (*Hasanta*).
+* Regularizes Bengali Dari (`।`) punctuation spacing.
+* Strips recurring Bangladesh Gazette headers, ministry notices, and page number footers.
+
+### 4. Legal Structure-Aware Chunker (`chunker.py`)
+* Detects statutory boundaries:
+  * Bengali: `ধারা`, `দণ্ডবিধি`, `বিধি`, `অনুচ্ছেদ`
+  * English: `Section`, `Rule`, `Article`, `Order`
+* Produces structured `LegalChunk` models with:
+  * `chunk_id`, `doc_id`, `act_name_bn`, `act_name_en`, `act_year`
+  * `section_number` (e.g., `"৩৭৮"` or `"378"`)
+  * `section_title` (e.g., `"চুরি"` or `"Theft"`)
+  * `page_numbers` and sub-chunk tracking for large sections.
+
+---
+
+## 🧪 Running Automated Tests
+
+Run unit tests via `pytest`:
+
+```bash
+# Run all unit tests
+pytest -v
+
+# Test section-aware chunker
+pytest tests/test_chunker.py -v
+
+# Test quality checker and encoding detection
+pytest tests/test_quality_check.py -v
 ```
 
 ---
 
-## 🛠️ Testing & CLI Reference Guide
+## ⚙️ Configuration
 
-### 1. Document Ingestion & Chunking (`scripts/run_ingestion.py`)
-
-*   **Process both default PDFs (`policeAct` & `policeRegulations`):**
-    ```bash
-    python scripts/run_ingestion.py
-    ```
-*   **Process only the Police Act, 1861:**
-    ```bash
-    python scripts/run_ingestion.py --doc policeAct
-    ```
-*   **Process only the Police Regulations of Bengal:**
-    ```bash
-    python scripts/run_ingestion.py --doc policeRegulations
-    ```
-*   **Inspect chunk outputs (e.g., first 10 chunks):**
-    ```bash
-    python scripts/run_ingestion.py --doc policeAct --inspect 10
-    ```
-*   **Save chunks & generate quality report JSON:**
-    ```bash
-    python scripts/run_ingestion.py --all --save-chunks --report
-    ```
-*   **Process an arbitrary PDF path:**
-    ```bash
-    python scripts/run_ingestion.py --pdf data/Police_Law/policeAct.pdf --inspect 5
-    ```
-
-### 2. Automated Unit Tests (`pytest`)
-
-*   **Run all tests:**
-    ```bash
-    pytest -v
-    ```
-*   **Run chunker tests:**
-    ```bash
-    pytest tests/test_chunker.py -v
-    ```
-*   **Run quality check & OCR fallback tests:**
-    ```bash
-    pytest tests/test_quality_check.py -v
-    ```
-*   **Run legal guardrail tests:**
-    ```bash
-    pytest tests/test_guardrails.py -v
-    ```
-*   **Run FAISS & hybrid search retriever tests:**
-    ```bash
-    pytest tests/test_retrieval.py -v
-    ```
-
-### 3. Vector Indexing (`scripts/build_index.py`)
-
-*   **Build Local FAISS Index:**
-    ```bash
-    python scripts/build_index.py
-    ```
-*   **Build Qdrant Index:**
-    ```bash
-    python scripts/build_index.py --use-qdrant
-    ```
-
-### 4. Interactive Query CLI (`scripts/demo_query.py`)
-
-*   **Bengali Query:**
-    ```bash
-    python scripts/demo_query.py --query "পেনাল কোড অনুযায়ী চুরির শাস্তি কী?" --lang bn
-    ```
-*   **English Query:**
-    ```bash
-    python scripts/demo_query.py --query "What is the procedure for filing a GD?" --lang en
-    ```
-
+* [`configs/ingestion.yaml`](file:///k:/Police-GPT/configs/ingestion.yaml): Configure minimum text lengths, Bengali Unicode thresholds, and OCR engine settings.
+* [`configs/chunking.yaml`](file:///k:/Police-GPT/configs/chunking.yaml): Configure target chunk size (default: 512), overlap (default: 64), and boundary regex patterns.

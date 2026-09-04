@@ -1,24 +1,2 @@
-# Retrieval & Reranking Configuration
-search:
-  type: "hybrid" # dense, sparse, hybrid
-  dense_top_k: 20
-  sparse_top_k: 20
-  final_top_k: 10
-  
-hybrid_fusion:
-  strategy: "rrf" # rrf (Reciprocal Rank Fusion) or weighted
-  rrf_k: 60
-  dense_weight: 0.65
-  sparse_weight: 0.35
-
-reranking:
-  enabled: true
-  model_name: "BAAI/bge-reranker-v2-m3"
-  top_n: 5
-  score_threshold: 0.25
-  batch_size: 16
-
-filters:
-  allow_act_filter: true
-  allow_year_filter: true
-  allow_jurisdiction_filter: true
+# Retrieval configuration placeholder
+# Retrieval logic is decoupled from this repository (repository is scoped exclusively to Document Chunking).

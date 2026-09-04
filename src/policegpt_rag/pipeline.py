@@ -1,193 +1,175 @@
 """
-PoliceGPT RAG Pipeline Orchestrator.
-Connects: Ingestion -> Normalization -> Chunking -> Embeddings -> Index -> Hybrid Retrieval -> Reranking -> LLM -> Cited Answer.
+PoliceGPT - Legal Document Ingestion & Chunking Pipeline.
+Connects: PyMuPDF Extraction -> Quality Check -> OCR Fallback -> Unicode Normalizer -> Boilerplate Cleaner -> Legal Section Chunker.
 """
 
 from typing import List, Dict, Any, Optional
 from pathlib import Path
+from pydantic import BaseModel, Field
 from loguru import logger
-from pydantic import BaseModel
 
-from .ingestion.parse_pdf import PDFParser
-from .ingestion.quality_check import DocumentQualityChecker
+from .ingestion.parse_pdf import PDFParser, ParsedPage
+from .ingestion.quality_check import DocumentQualityChecker, QualityCheckResult
 from .ingestion.ocr_fallback import OCRFallbackEngine
 from .preprocessing.normalize import UnicodeNormalizer
 from .preprocessing.boilerplate import BoilerplateCleaner
 from .preprocessing.chunker import LegalSectionChunker, LegalChunk
-from .embedding.embed import BGEM3Embedder
-from .embedding.batch_runner import BatchEmbeddingRunner
-from .indexing.qdrant_index import QdrantHybridIndex
-from .indexing.faiss_index import LocalFaissIndex
-from .retrieval.hybrid_search import HybridSearchRetriever
-from .retrieval.rerank import CrossEncoderReranker
-from .generation.prompt_templates import LegalPromptBuilder
-from .generation.llm_client import LLMClient
-from .generation.guardrails import LegalGuardrails, GuardrailValidationResult
 
 
-class PoliceGPTResponse(BaseModel):
-    query: str
-    answer: str
-    citations: List[str]
-    retrieved_sources: List[Dict[str, Any]]
-    confidence_score: float
-    is_grounded: bool
-    guardrail_status: GuardrailValidationResult
+class DocumentProcessingResult(BaseModel):
+    """Result of processing an entire document through the chunking pipeline."""
+    doc_id: str
+    source_file: str
+    total_pages: int
+    passed_pages: int
+    ocr_triggered_pages: int
+    total_chunks: int
+    section_chunks: int
+    sliding_chunks: int
+    chunks: List[LegalChunk]
+    page_quality: List[Dict[str, Any]] = Field(default_factory=list)
 
 
-class PoliceGPTRAGPipeline:
+class PoliceGPTChunkingPipeline:
+    """
+    Core Document Ingestion & Legal Section Chunking Pipeline.
+    """
     def __init__(
         self,
-        qdrant_host: str = "localhost",
-        qdrant_port: int = 6333,
-        collection_name: str = "policegpt_legal_corpus",
-        llm_provider: str = "ollama",
-        llm_model: str = "qwen2.5:7b",
-        embedding_model: str = "BAAI/bge-m3",
-        reranker_model: str = "BAAI/bge-reranker-v2-m3",
+        target_chunk_size: int = 512,
+        chunk_overlap: int = 64,
+        min_chunk_size: int = 100,
+        min_text_length_per_page: int = 50,
+        min_bangla_unicode_ratio: float = 0.15,
+        min_valid_char_ratio: float = 0.80,
+        ocr_engine: str = "easyocr",
+        use_gpu: bool = False,
     ):
-        logger.info("Initializing PoliceGPT RAG Pipeline components...")
+        logger.info("Initializing PoliceGPT Document Chunking Pipeline...")
 
-        # 1. Ingestion & Quality
-        self.quality_checker = DocumentQualityChecker()
-        self.ocr_engine = OCRFallbackEngine()
-        self.pdf_parser = PDFParser(self.quality_checker, self.ocr_engine)
+        # 1. Ingestion & Quality Gates
+        self.quality_checker = DocumentQualityChecker(
+            min_text_length_per_page=min_text_length_per_page,
+            min_bangla_unicode_ratio=min_bangla_unicode_ratio,
+            min_valid_char_ratio=min_valid_char_ratio,
+        )
+        self.ocr_engine = OCRFallbackEngine(engine=ocr_engine, use_gpu=use_gpu)
+        self.pdf_parser = PDFParser(
+            quality_checker=self.quality_checker,
+            ocr_engine=self.ocr_engine,
+        )
 
-        # 2. Preprocessing
+        # 2. Text Normalization & Cleaning
         self.normalizer = UnicodeNormalizer()
         self.boilerplate_cleaner = BoilerplateCleaner()
-        self.chunker = LegalSectionChunker()
 
-        # 3. Embedding & Indexing
-        self.embedder = BGEM3Embedder(model_name=embedding_model)
-        self.batch_runner = BatchEmbeddingRunner(self.embedder)
-        self.qdrant_index = QdrantHybridIndex(
-            collection_name=collection_name, host=qdrant_host, port=qdrant_port
+        # 3. Structure-Aware Legal Chunker
+        self.chunker = LegalSectionChunker(
+            target_chunk_size=target_chunk_size,
+            chunk_overlap=chunk_overlap,
+            min_chunk_size=min_chunk_size,
         )
-        self.faiss_index = LocalFaissIndex()
 
-        # 4. Retrieval & Reranking
-        self.retriever = HybridSearchRetriever(
-            embedder=self.embedder,
-            qdrant_index=self.qdrant_index,
-            faiss_index=self.faiss_index,
-        )
-        self.reranker = CrossEncoderReranker(model_name=reranker_model)
-
-        # 5. Generation & Guardrails
-        self.prompt_builder = LegalPromptBuilder()
-        self.llm_client = LLMClient(provider=llm_provider, model_name=llm_model)
-        self.guardrails = LegalGuardrails()
-
-    def process_and_index_document(
+    def process_pdf(
         self,
         pdf_path: str | Path,
-        doc_id: str,
+        doc_id: Optional[str] = None,
         act_name_bn: Optional[str] = None,
         act_name_en: Optional[str] = None,
         act_year: Optional[int] = None,
-        use_qdrant: bool = True,
-    ) -> List[Dict[str, Any]]:
+        is_expected_bangla: bool = True,
+    ) -> DocumentProcessingResult:
         """
-        Full ingestion pipeline: Parse PDF -> Clean -> Section Chunk -> Embed -> Index
+        End-to-end PDF processing:
+        PyMuPDF extract -> Quality detection -> OCR fallback -> Normalize -> Clean -> Legal chunk
         """
-        logger.info(f"Starting ingestion workflow for {pdf_path}...")
-        parsed_pages = self.pdf_parser.parse_pdf(pdf_path)
+        path = Path(pdf_path)
+        if not path.exists():
+            raise FileNotFoundError(f"PDF file not found at: {path}")
 
+        effective_doc_id = doc_id or path.stem
+        logger.info(f"Processing PDF document: {path.name} (doc_id={effective_doc_id})")
+
+        # Step 1: Extract page text & evaluate quality (with OCR fallback)
+        parsed_pages: List[ParsedPage] = self.pdf_parser.parse_pdf(
+            file_path=path,
+            is_expected_bangla=is_expected_bangla,
+        )
+
+        # Step 2: Normalize and strip boilerplate
         full_cleaned_text = ""
         source_pages = []
-        for p in parsed_pages:
-            normalized = self.normalizer.normalize(p.text)
+        page_quality_records = []
+        passed_count = 0
+        ocr_count = 0
+
+        for page in parsed_pages:
+            normalized = self.normalizer.normalize(page.text)
             cleaned = self.boilerplate_cleaner.clean(normalized)
             full_cleaned_text += "\n" + cleaned
-            source_pages.append(p.page_number)
+            source_pages.append(page.page_number)
 
+            if page.quality.passed:
+                passed_count += 1
+            if page.quality.needs_ocr:
+                ocr_count += 1
+
+            page_quality_records.append(page.to_dict())
+
+        # Step 3: Legal structure-aware chunking
         chunks: List[LegalChunk] = self.chunker.chunk_document(
             text=full_cleaned_text,
-            doc_id=doc_id,
+            doc_id=effective_doc_id,
             act_name_bn=act_name_bn,
             act_name_en=act_name_en,
             act_year=act_year,
             source_pages=source_pages,
         )
 
-        embedded_records = self.batch_runner.process_chunks(chunks)
+        section_chunks = sum(1 for c in chunks if c.section_number is not None)
+        sliding_chunks = len(chunks) - section_chunks
 
-        if use_qdrant:
-            self.qdrant_index.create_collection(recreate=False)
-            self.qdrant_index.upsert_records(embedded_records)
-        else:
-            self.faiss_index.build_index(embedded_records)
+        logger.info(
+            f"Completed processing for '{path.name}': {len(chunks)} chunks produced "
+            f"({section_chunks} section, {sliding_chunks} sliding window)."
+        )
 
-        return embedded_records
+        return DocumentProcessingResult(
+            doc_id=effective_doc_id,
+            source_file=path.name,
+            total_pages=len(parsed_pages),
+            passed_pages=passed_count,
+            ocr_triggered_pages=ocr_count,
+            total_chunks=len(chunks),
+            section_chunks=section_chunks,
+            sliding_chunks=sliding_chunks,
+            chunks=chunks,
+            page_quality=page_quality_records,
+        )
 
-    def query(
+    def process_text(
         self,
-        query_text: str,
-        language: str = "bn",
-        top_k: int = 10,
-        rerank_top_n: int = 5,
-        filters: Optional[Dict[str, Any]] = None,
-    ) -> PoliceGPTResponse:
+        raw_text: str,
+        doc_id: str,
+        act_name_bn: Optional[str] = None,
+        act_name_en: Optional[str] = None,
+        act_year: Optional[int] = None,
+        source_pages: Optional[List[int]] = None,
+    ) -> List[LegalChunk]:
         """
-        Query answering workflow:
-        Validate query -> Hybrid Retrieve -> Cross-Encoder Rerank -> Prompt LLM -> Verify Guardrails -> Return
+        Directly process and chunk pre-extracted raw text.
         """
-        # Guardrail: Check safety of query
-        is_safe, msg = self.guardrails.validate_query(query_text)
-        if not is_safe:
-            return PoliceGPTResponse(
-                query=query_text,
-                answer=f"অনুরোধটি বাতিল করা হয়েছে: {msg}",
-                citations=[],
-                retrieved_sources=[],
-                confidence_score=0.0,
-                is_grounded=False,
-                guardrail_status=GuardrailValidationResult(
-                    is_safe=False,
-                    has_mandatory_citations=False,
-                    detected_citations=[],
-                    out_of_scope_flag=True,
-                    final_output=msg,
-                    violations=[msg],
-                ),
-            )
-
-        # 1. Retrieval
-        candidate_chunks = self.retriever.retrieve(
-            query=query_text, top_k=top_k, filters=filters, use_qdrant=True
+        normalized = self.normalizer.normalize(raw_text)
+        cleaned = self.boilerplate_cleaner.clean(normalized)
+        return self.chunker.chunk_document(
+            text=cleaned,
+            doc_id=doc_id,
+            act_name_bn=act_name_bn,
+            act_name_en=act_name_en,
+            act_year=act_year,
+            source_pages=source_pages or [],
         )
 
-        # 2. Reranking
-        top_chunks = self.reranker.rerank(
-            query=query_text, candidate_chunks=candidate_chunks, top_n=rerank_top_n
-        )
 
-        # 3. Prompting & LLM Generation
-        sys_prompt = self.prompt_builder.build_system_prompt(language=language)
-        user_prompt = self.prompt_builder.build_user_prompt(
-            query=query_text, retrieved_chunks=top_chunks, language=language
-        )
-
-        raw_llm_output = self.llm_client.generate(sys_prompt, user_prompt)
-
-        # 4. Guardrail Validation & Post-processing
-        guardrail_result = self.guardrails.validate_and_postprocess(
-            raw_answer=raw_llm_output, retrieved_context=top_chunks, language=language
-        )
-
-        avg_confidence = (
-            sum(c.get("rerank_score", c.get("score", 0.8)) for c in top_chunks) / len(top_chunks)
-            if top_chunks
-            else 0.0
-        )
-
-        return PoliceGPTResponse(
-            query=query_text,
-            answer=guardrail_result.final_output,
-            citations=guardrail_result.detected_citations,
-            retrieved_sources=top_chunks,
-            confidence_score=float(avg_confidence),
-            is_grounded=guardrail_result.has_mandatory_citations,
-            guardrail_status=guardrail_result,
-        )
+# Backwards compatibility alias
+PoliceGPTRAGPipeline = PoliceGPTChunkingPipeline

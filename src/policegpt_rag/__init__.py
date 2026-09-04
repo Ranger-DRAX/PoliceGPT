@@ -1,5 +1,8 @@
 """
-PoliceGPT RAG: Specialized Legal Retrieval-Augmented Generation for Bangladesh Police.
+PoliceGPT: Specialized Legal Document Ingestion & Structure-Aware Chunking Engine for Bangladesh Police.
 """
 
-__version__ = "0.1.0"
+from .pipeline import PoliceGPTChunkingPipeline, DocumentProcessingResult
+
+__version__ = "0.2.0"
+__all__ = ["PoliceGPTChunkingPipeline", "DocumentProcessingResult"]

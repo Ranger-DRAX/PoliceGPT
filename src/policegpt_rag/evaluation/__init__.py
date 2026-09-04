@@ -1,8 +1,4 @@
 """
-Evaluation module: Retrieval benchmarks (Recall@k, MRR, HitRate) and RAGAS QA evaluation.
+Evaluation package placeholder.
+Evaluation benchmarks are decoupled from this repository (repository is scoped exclusively to Document Chunking).
 """
-
-from .retrieval_metrics import RetrievalEvaluator, RetrievalMetricScores
-from .generation_metrics import GenerationEvaluator
-
-__all__ = ["RetrievalEvaluator", "RetrievalMetricScores", "GenerationEvaluator"]

@@ -1,8 +1,4 @@
 """
-Retrieval module: Hybrid dense-sparse search and cross-encoder reranking.
+Retrieval package placeholder.
+Retrieval logic is decoupled from this repository (repository is scoped exclusively to Document Chunking).
 """
-
-from .hybrid_search import HybridSearchRetriever
-from .rerank import CrossEncoderReranker
-
-__all__ = ["HybridSearchRetriever", "CrossEncoderReranker"]

@@ -1,8 +1,4 @@
 """
-Indexing module: FAISS local vector store & Qdrant hybrid vector index with payload filtering.
+Indexing package placeholder.
+Vector indexing is decoupled from this repository (repository is scoped exclusively to Document Chunking).
 """
-
-from .faiss_index import LocalFaissIndex
-from .qdrant_index import QdrantHybridIndex
-
-__all__ = ["LocalFaissIndex", "QdrantHybridIndex"]
