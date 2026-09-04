@@ -1,0 +1,24 @@
+# Ingestion Configuration
+parser:
+  primary: "pymupdf" # pymupdf, pdfplumber, docling, marker
+  extract_images: false
+  extract_tables: true
+
+quality_check:
+  min_text_length_per_page: 50
+  min_bangla_unicode_ratio: 0.15 # Ratio of Bengali unicode characters if document is Bengali
+  min_valid_char_ratio: 0.80     # Valid alphanumeric + punctuation vs gibberish/corrupt font glyphs
+  density_threshold: 0.05
+
+ocr:
+  engine: "tesseract" # Tesseract 5 CPU-only OCR fallback
+  languages: ["bn", "en"]
+  dpi: 300
+  psm: 6
+  oem: 3
+  tesseract_cmd: null # null for auto-discovery (PATH, default Windows dirs, or TESSERACT_CMD)
+  tessdata_dir: null  # null for default system tessdata or TESSDATA_PREFIX
+
+paths:
+  raw_dir: "data/raw"
+  interim_dir: "data/interim"

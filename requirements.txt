@@ -1,0 +1,24 @@
+# PoliceGPT — Legal Document Ingestion & Chunking Dependencies
+
+# Document Ingestion & PDF Parsing
+pymupdf>=1.23.0
+pdfplumber>=0.10.3
+
+# Core Data Modeling & Utilities
+pydantic>=2.5.0
+pydantic-settings>=2.1.0
+pyyaml>=6.0.1
+rich>=13.7.0
+loguru>=0.7.2
+tqdm>=4.66.0
+python-dotenv>=1.0.1
+
+# OCR Fallback Engine (Tesseract 5 CPU-only)
+pytesseract>=0.3.10
+pillow>=10.0.0
+
+# Testing & Dev Tools
+pytest>=8.0.0
+pytest-asyncio>=0.23.0
+ruff>=0.3.0
+black>=24.2.0
