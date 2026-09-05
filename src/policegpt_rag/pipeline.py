@@ -41,6 +41,7 @@ class PoliceGPTChunkingPipeline:
         min_chunk_size: int = 100,
         min_text_length_per_page: int = 50,
         min_bangla_unicode_ratio: float = 0.15,
+        min_valid_char_ratio: float = 0.80,
         ocr_engine: str = "tesseract",
         use_gpu: bool = False,
         ocr_languages: Optional[List[str]] = None,

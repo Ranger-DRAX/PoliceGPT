@@ -1,53 +1,89 @@
-# PoliceGPT — Legal Document Ingestion & Section Chunking
+# PoliceGPT — Legal Document RAG Pipeline
 
-A specialized multilingual (Bengali & English) legal document processing and structure-aware chunking pipeline tailored for Bangladesh Police regulations, penal codes, criminal procedure, special acts, and regulatory documents.
+A specialized multilingual (Bengali & English) legal document processing and retrieval pipeline tailored for Bangladesh Police regulations, penal codes, criminal procedure, special acts, and regulatory documents.
 
-> **Design Principle:** This repository is focused strictly on the **Document Ingestion & Chunking Layer** (PyMuPDF → Quality Detection → OCR Fallback → Text Cleaning → Legal Structure Detection → Section Chunking). Downstream components (embeddings, vector databases, retrieval, and LLMs) are decoupled to ensure the extraction and chunking quality is robust, verified, and transparent.
+> **Hardware Target:** Intel i3 6th-gen / NVIDIA GTX 1050 Ti (4 GB VRAM) / 8 GB RAM
 
 ---
 
 ## 🏛️ Pipeline Architecture
 
 ```
-[Raw Legal PDFs (Police Act, PRB, Penal Code)]
-                      │
-                      ▼
-              ┌───────────────┐
-              │    PyMuPDF    │
-              └───────┬───────┘
-                      │
-                      ▼
-              Extract Page Text
-                      │
-                      ▼
-           ┌──────────────────────┐
-           │ DocumentQualityCheck │
-           └──────────┬───────────┘
-                      │
-               ┌──────┴──────┐
-              GOOD          POOR / SCANNED / CORRUPT
-               │             │
-               │             ▼
-               │        Render Page Image
-               │             │
-               │             ▼
-               │     OCR Fallback (EasyOCR / PaddleOCR)
-               │             │
-               └──────┬──────┘
-                      ▼
-           Unicode NFC & ZWJ/ZWNJ Normalization
-                      │
-                      ▼
-           Gazette & Header Boilerplate Cleaning
-                      │
-                      ▼
-           Legal Structure Detection (ধারা / Section / বিধি / Rule)
-                      │
-                      ▼
-           Legal Chunking with Rich Metadata
-                      │
-                      ▼
-           CLI Inspection & JSON / Parquet Export
+┌─────────────────────────────────────────────────────────────┐
+│ 1. PDF Extraction (PyMuPDF)                                 │
+│    • Page-by-page text extraction from legal statute PDFs    │
+└──────────────────────────────┬──────────────────────────────┘
+                               │
+                               ▼
+┌─────────────────────────────────────────────────────────────┐
+│ 2. Document Quality Check                                   │
+│    • Bengali Unicode density (≥15% for expected BN docs)    │
+│    • Valid character ratio (≥80%)                            │
+│    • Minimum text length per page (≥50 chars)               │
+└──────────────────────────────┬──────────────────────────────┘
+                               │
+                    ┌──────────┴──────────┐
+                   GOOD              POOR / SCANNED
+                    │                     │
+                    │                     ▼
+                    │     ┌───────────────────────────────┐
+                    │     │ 3. OCR Fallback (Tesseract 5) │
+                    │     │    • CPU-only, bn + en        │
+                    │     │    • 300 DPI page rendering    │
+                    │     └───────────────┬───────────────┘
+                    │                     │
+                    └──────────┬──────────┘
+                               │
+                               ▼
+┌─────────────────────────────────────────────────────────────┐
+│ 4. Text Normalization & Cleaning                            │
+│    • Unicode NFC + ZWJ/ZWNJ cleanup                        │
+│    • Bangladesh Gazette header/footer stripping             │
+└──────────────────────────────┬──────────────────────────────┘
+                               │
+                               ▼
+┌─────────────────────────────────────────────────────────────┐
+│ 5. Legal Structure-Aware Chunking                           │
+│    • Detects ধারা/Section/বিধি/Rule/Article boundaries      │
+│    • Rich metadata: section_number, title, act, page refs   │
+│    • Sliding window fallback for non-section text           │
+└──────────────────────────────┬──────────────────────────────┘
+                               │
+                               ▼
+┌─────────────────────────────────────────────────────────────┐
+│ 6. BGE-M3 Embedding (CUDA fp16)                             │
+│    • 1024-dim dense vectors + sparse lexical weights        │
+│    • Batched with OOM recovery & CPU fallback               │
+│    • Output: Parquet per document                           │
+└──────────────────────────────┬──────────────────────────────┘
+                               │
+                               ▼
+┌─────────────────────────────────────────────────────────────┐
+│ 7. FAISS & Lexical Indexing                                 │
+│    • FAISS IndexFlatIP for 1024-dim dense vectors           │
+│    • Inverted index for BGE-M3 sparse lexical weights       │
+└──────────────────────────────┬──────────────────────────────┘
+                               │
+                               ▼
+┌─────────────────────────────────────────────────────────────┐
+│ 8. Hybrid Retrieval + Reciprocal Rank Fusion (RRF)          │
+│    • Dense cosine search + Sparse term dot-product search   │
+│    • RRF(d) = Σ 1/(60 + rank_m) blends both rankings       │
+│    • Returns top-5 fused statutory chunks with citations    │
+└──────────────────────────────┬──────────────────────────────┘
+                               │
+                               ▼
+┌─────────────────────────────────────────────────────────────┐
+│ 9. Reranker (Cross-Encoder) [code-complete, disabled]       │
+│    • BGE-Reranker-Base, disabled by default (VRAM budget)   │
+│    • Enable via use_reranker: true in retrieval.yaml        │
+└──────────────────────────────┬──────────────────────────────┘
+                               │
+                               ▼
+┌─────────────────────────────────────────────────────────────┐
+│ 10. LLM Generation + Legal Guardrails  [NOT IMPLEMENTED]    │
+│     • LLM Client, Prompt Templates, Citation Guardrails     │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -56,39 +92,76 @@ A specialized multilingual (Bengali & English) legal document processing and str
 
 ```
 Police-GPT/
-├── README.md                       # Project documentation & CLI reference
-├── agent.md                        # Architectural guidelines & processing flow
-├── approach.md                     # Chunker flow summary
-├── pyproject.toml                  # Packaging specification
-├── requirements.txt                # Lightweight chunking dependencies
+├── README.md
+├── agent.md                        # Embedding stage specification
+├── pyproject.toml
+├── requirements.txt
 │
 ├── configs/
-│   ├── ingestion.yaml              # PDF parser, quality thresholds, OCR settings
-│   └── chunking.yaml               # Target chunk size, overlap %, legal regex patterns
+│   ├── ingestion.yaml              # PDF parser, quality thresholds, OCR (Tesseract 5)
+│   ├── chunking.yaml               # Target chunk size, overlap, legal regex patterns
+│   ├── embedding.yaml              # BGE-M3 model, batch size, CUDA/CPU, fp16
+│   ├── retrieval.yaml              # FAISS + Sparse hybrid, RRF k=60, reranker toggle
+│   └── generation.yaml             # Placeholder
 │
 ├── data/
 │   ├── Police_Law/                 # Source statutes (Police Act 1861, PRB 1943, Penal Code 1860)
-│   └── processed/                  # Generated chunk JSONs and quality reports
+│   ├── interim/                    # Intermediate normalized/cleaned JSON per document
+│   └── processed/
+│       ├── *_chunks.json           # Chunked legal sections with metadata
+│       ├── embeddings/             # Parquet files with dense + sparse vectors
+│       └── indexes/                # FAISS binary index + sparse JSON + metadata
 │
 ├── src/policegpt_rag/
 │   ├── ingestion/
-│   │   ├── parse_pdf.py            # Page-by-page extraction with quality gate
+│   │   ├── parse_pdf.py            # PyMuPDF page-by-page extraction with quality gate
 │   │   ├── quality_check.py        # Bengali Unicode density & corrupt font detection
-│   │   └── ocr_fallback.py         # EasyOCR & PaddleOCR fallback engine
+│   │   └── ocr_fallback.py         # Tesseract 5 OCR (CPU-only, auto-discovery)
 │   │
 │   ├── preprocessing/
 │   │   ├── normalize.py            # NFC normalization, ZWJ/ZWNJ cleanup, digit conversion
 │   │   ├── boilerplate.py          # Bangladesh Gazette & header/footer remover
 │   │   └── chunker.py              # LegalSectionChunker (ধারা/Section boundary chunking)
 │   │
-│   └── pipeline.py                 # Core PoliceGPTChunkingPipeline orchestrator
+│   ├── embedding/
+│   │   ├── embed.py                # BGEM3Embedder — dense + sparse, CUDA fp16, OOM recovery
+│   │   └── batch_runner.py         # EmbeddingBatchRunner — Parquet I/O, resume support
+│   │
+│   ├── indexing/
+│   │   ├── faiss_index.py          # FAISSVectorIndex — IndexFlatIP, L2-normalized cosine
+│   │   └── sparse_index.py         # SparseLexicalIndex — inverted term dot-product index
+│   │
+│   ├── retrieval/
+│   │   ├── hybrid_search.py        # HybridRetriever — Dense + Sparse + RRF fusion
+│   │   └── rerank.py               # BGEReranker — cross-encoder (lazy-loaded, optional)
+│   │
+│   ├── generation/                 # ⚠️ Placeholders — not yet implemented
+│   │   ├── llm_client.py
+│   │   ├── prompt_templates.py
+│   │   └── guardrails.py
+│   │
+│   ├── evaluation/                 # ⚠️ Placeholders — not yet implemented
+│   │   ├── retrieval_metrics.py
+│   │   └── generation_metrics.py
+│   │
+│   └── pipeline.py                 # PoliceGPTChunkingPipeline orchestrator
 │
 ├── scripts/
-│   └── run_ingestion.py            # Rich CLI runner for document chunking & inspection
+│   ├── run_ingestion.py            # Rich CLI: PDF → Quality → OCR → Clean → Chunk
+│   ├── build_embeddings.py         # Rich CLI: Chunks → BGE-M3 → Parquet embeddings
+│   ├── build_index.py              # Rich CLI: Parquet → FAISS + Sparse indexes
+│   └── search_cli.py              # Rich CLI: Interactive hybrid legal search
 │
-└── tests/
-    ├── test_chunker.py             # Section-aware chunking tests
-    └── test_quality_check.py       # Quality evaluator & encoding test cases
+├── tests/
+│   ├── test_chunker.py             # Section-aware chunking tests
+│   ├── test_quality_check.py       # Quality evaluator & encoding test cases (3 tests)
+│   ├── test_ocr_fallback.py        # Tesseract 5 OCR engine tests (6 tests)
+│   ├── test_embedding.py           # BGE-M3 embedder tests (mocked, 5+ tests)
+│   └── test_indexing.py            # FAISS + Sparse + Hybrid RRF tests (5 tests)
+│
+├── api/                            # ⚠️ Placeholder — not yet implemented
+├── finetuning/                     # ⚠️ Placeholder — not yet implemented
+└── venv/
 ```
 
 ---
@@ -98,97 +171,171 @@ Police-GPT/
 ### 1. Environment Setup
 
 ```bash
-# Create virtual environment
+# Create and activate virtual environment
 python -m venv venv
 
-# Activate virtual environment
 # Windows:
 venv\Scripts\activate
 # Linux/macOS:
 source venv/bin/activate
 
-# Install dependencies
+# Install dependencies (includes PyTorch CUDA 11.8 for GTX 1050 Ti)
 pip install -r requirements.txt
 ```
 
-### 2. Run Ingestion & Chunking CLI
+**System Dependencies:**
+
+| Dependency | Purpose | Install |
+|---|---|---|
+| **Tesseract 5** | OCR fallback for scanned pages | [Windows installer](https://github.com/UB-Mannheim/tesseract/wiki) or `sudo apt install tesseract-ocr tesseract-ocr-ben` |
+| **ben.traineddata** | Bengali OCR language data | Included in `tesseract-ocr-ben` package or [download manually](https://github.com/tesseract-ocr/tessdata) |
+
+> Tesseract is auto-discovered from PATH, standard Windows install directories, or the `TESSERACT_CMD` env var. If unavailable, OCR fallback degrades gracefully (logs a warning, returns partial PyMuPDF text).
+
+### 2. Ingestion & Chunking
 
 ```bash
 # Process all default law documents
-python scripts/run_ingestion.py
+python scripts/run_ingestion.py --all --save-chunks --report
 
-# Process only The Police Act, 1861 and inspect first 5 chunks
+# Process a single document and inspect chunks
 python scripts/run_ingestion.py --doc policeAct --inspect 5
 
-# Process Police Regulations of Bengal
-python scripts/run_ingestion.py --doc policeRegulations
-
-# Process The Penal Code, 1860
-python scripts/run_ingestion.py --doc penalCode
-
-# Process an arbitrary external PDF
+# Process an external PDF
 python scripts/run_ingestion.py --pdf path/to/law_document.pdf --inspect 10
-
-# Save all chunks to JSON and generate a quality report
-python scripts/run_ingestion.py --all --save-chunks --report
 ```
 
-Output chunks and quality reports are saved to `data/processed/`:
-* `data/processed/<doc_id>_chunks.json`
-* `data/processed/quality_report.json`
+**Output:** `data/processed/<doc_id>_chunks.json`
+
+### 3. Build Embeddings
+
+```bash
+# Embed all chunked documents (uses CUDA fp16 if available)
+python scripts/build_embeddings.py --all
+
+# Embed a single document
+python scripts/build_embeddings.py --doc police_act_1861
+
+# Override batch size for lower VRAM
+python scripts/build_embeddings.py --all --batch-size 2
+
+# Check GPU availability
+python scripts/build_embeddings.py --check-gpu
+```
+
+**Output:** `data/processed/embeddings/<doc_id>_embeddings.parquet`
+
+### 4. Build Hybrid Indexes
+
+```bash
+# Compile FAISS dense + Sparse lexical indexes from Parquet embeddings
+python scripts/build_index.py
+```
+
+**Output:**
+- `data/processed/indexes/dense_index.faiss` — FAISS IndexFlatIP binary
+- `data/processed/indexes/sparse_index.json` — Inverted lexical index
+- `data/processed/indexes/chunks_metadata.json` — Chunk text & metadata registry
+
+### 5. Search Legal Statutes
+
+```bash
+# Single query (Bengali)
+python scripts/search_cli.py --query "চুরির শাস্তি কি?"
+
+# Single query (English)
+python scripts/search_cli.py --query "powers of police officer to arrest without warrant"
+
+# Interactive search session
+python scripts/search_cli.py --interactive
+
+# Custom top-k
+python scripts/search_cli.py --query "ধারা ৩৭৮" --top-k 10
+```
 
 ---
 
-## 🛠️ Key Components & Capabilities
+## 🛠️ Key Components
 
-### 1. Document Quality Checker (`quality_check.py`)
-Evaluates each extracted page to ensure:
-* **Character Length**: Rejects pages below `min_text_length_per_page=50` (flags scanned pages).
-* **Bengali Unicode Density**: Checks for proper Bengali script (`[\u0980-\u09FF]`). Detects garbled legacy fonts (e.g. Bijoy ASCII encoding errors).
-* **Valid Character Ratio**: Ensures character readability exceeds `min_valid_char_ratio=0.80`.
-* **Automatic OCR Routing**: Automatically triggers OCR fallback when a page fails text layer checks.
+### Ingestion & Quality Gate (`ingestion/`)
 
-### 2. OCR Fallback Engine (`ocr_fallback.py`)
-* Automatically renders page images at 200–300 DPI.
-* Supports **EasyOCR** and **PaddleOCR** with Bengali (`bn`) and English (`en`) support.
-* Falls back gracefully if OCR packages are not locally installed.
+- **`parse_pdf.py`** — PyMuPDF page-by-page extraction. Each page passes through a quality gate; poor pages trigger OCR fallback automatically.
+- **`quality_check.py`** — Evaluates Bengali Unicode density (≥15%), valid character ratio (≥80%), and minimum text length (≥50 chars). Detects garbled legacy fonts (e.g., Bijoy ASCII encoding errors).
+- **`ocr_fallback.py`** — Tesseract 5 via `pytesseract`. CPU-only by design (leaves GPU for embedding). Auto-discovers the Tesseract binary on Windows/Linux. Renders pages at 300 DPI via PyMuPDF. Graceful degradation if Tesseract is not installed.
 
-### 3. Unicode Normalization & Cleaning (`normalize.py`, `boilerplate.py`)
-* Performs Unicode **NFC** canonical decomposition and composition.
-* Cleans unneeded Zero-Width Joiners (`\u200D`), Zero-Width Non-Joiners (`\u200C`), and BOM characters while preserving valid Bengali conjuncts (*Hasanta*).
-* Regularizes Bengali Dari (`।`) punctuation spacing.
-* Strips recurring Bangladesh Gazette headers, ministry notices, and page number footers.
+### Preprocessing (`preprocessing/`)
 
-### 4. Legal Structure-Aware Chunker (`chunker.py`)
-* Detects statutory boundaries:
-  * Bengali: `ধারা`, `দণ্ডবিধি`, `বিধি`, `অনুচ্ছেদ`
-  * English: `Section`, `Rule`, `Article`, `Order`
-* Produces structured `LegalChunk` models with:
-  * `chunk_id`, `doc_id`, `act_name_bn`, `act_name_en`, `act_year`
-  * `section_number` (e.g., `"৩৭৮"` or `"378"`)
-  * `section_title` (e.g., `"চুরি"` or `"Theft"`)
-  * `page_numbers` and sub-chunk tracking for large sections.
+- **`normalize.py`** — Unicode NFC normalization, ZWJ/ZWNJ cleanup (preserving valid Bengali Hasanta conjuncts), Bengali Dari (`।`) spacing.
+- **`boilerplate.py`** — Strips recurring Bangladesh Gazette headers, ministry notices, and page number footers.
+- **`chunker.py`** — Legal structure-aware chunking. Detects `ধারা`, `Section`, `বিধি`, `Rule`, `Article` boundaries. Produces `LegalChunk` pydantic models with `chunk_id`, `doc_id`, `section_number`, `section_title`, `act_name_bn/en`, `act_year`, `page_numbers`. Falls back to sliding window (512 tokens, 64 overlap) for non-section text.
+
+### Embedding (`embedding/`)
+
+- **`embed.py`** — `BGEM3Embedder` wrapping `BAAI/bge-m3`. Produces 1024-dim dense vectors and sparse lexical weights. Lazy-loads model on first use. CUDA fp16 on GPU, auto-fallback to CPU fp32. On `torch.cuda.OutOfMemoryError`: catches OOM, halves batch size, retries.
+- **`batch_runner.py`** — `EmbeddingBatchRunner` reads `*_chunks.json`, streams through the embedder, writes `*_embeddings.parquet` with resume support (skips already-embedded chunk_ids).
+
+### Indexing (`indexing/`)
+
+- **`faiss_index.py`** — `FAISSVectorIndex` wrapping `faiss.IndexFlatIP`. L2-normalizes vectors for exact cosine similarity. Builds from Parquet files, enriches metadata from raw chunk JSON. Persists to `dense_index.faiss` + `chunks_metadata.json`.
+- **`sparse_index.py`** — `SparseLexicalIndex` inverted index. Maps BGE-M3 learned lexical token keys to `(chunk_id, weight)` postings. Computes query-document dot-product scores for exact statutory term matching (e.g., `"ধারা ৩৭৮"`, `"arrest"`).
+
+### Retrieval (`retrieval/`)
+
+- **`hybrid_search.py`** — `HybridRetriever` runs parallel dense FAISS search + sparse inverted index search. Applies Reciprocal Rank Fusion: `RRF(d) = Σ 1/(60 + rank_m(d))`. Returns `RetrievedChunk` pydantic objects with section citations, act names, text content, and score breakdowns.
+- **`rerank.py`** — `BGEReranker` using `BAAI/bge-reranker-base`. Lazy-loaded, disabled by default (`use_reranker: false` in `retrieval.yaml`) to conserve VRAM on the GTX 1050 Ti. Enable by setting `use_reranker: true`.
+
+### Generation & Guardrails (`generation/`) — ⚠️ Not Yet Implemented
+
+Placeholder stubs for the final RAG generation stage:
+- `llm_client.py` — LLM API client
+- `prompt_templates.py` — Bengali/English legal RAG prompt builder
+- `guardrails.py` — Legal citation enforcement and hallucination guardrails
 
 ---
 
-## 🧪 Running Automated Tests
-
-Run unit tests via `pytest`:
+## 🧪 Running Tests
 
 ```bash
 # Run all unit tests
 pytest -v
 
-# Test section-aware chunker
-pytest tests/test_chunker.py -v
-
-# Test quality checker and encoding detection
-pytest tests/test_quality_check.py -v
+# Individual test suites
+pytest tests/test_chunker.py -v         # Legal section chunking
+pytest tests/test_quality_check.py -v   # Quality checker (3 tests)
+pytest tests/test_ocr_fallback.py -v    # Tesseract 5 OCR (6 tests)
+pytest tests/test_embedding.py -v       # BGE-M3 embedder (mocked)
+pytest tests/test_indexing.py -v        # FAISS + Sparse + Hybrid RRF (5 tests)
 ```
+
+All tests run without GPU or network access (models are mocked).
 
 ---
 
 ## ⚙️ Configuration
 
-* [`configs/ingestion.yaml`](file:///k:/Police-GPT/configs/ingestion.yaml): Configure minimum text lengths, Bengali Unicode thresholds, and OCR engine settings.
-* [`configs/chunking.yaml`](file:///k:/Police-GPT/configs/chunking.yaml): Configure target chunk size (default: 512), overlap (default: 64), and boundary regex patterns.
+| Config | Purpose |
+|--------|---------|
+| [`configs/ingestion.yaml`](configs/ingestion.yaml) | PDF parser, quality thresholds, Tesseract 5 OCR settings (DPI, PSM, OEM, binary path) |
+| [`configs/chunking.yaml`](configs/chunking.yaml) | Target chunk size (512), overlap (64), min chunk size, legal regex patterns |
+| [`configs/embedding.yaml`](configs/embedding.yaml) | BGE-M3 model, batch size (4), device (cuda/cpu), fp16, max_length, return_dense/sparse |
+| [`configs/retrieval.yaml`](configs/retrieval.yaml) | FAISS dimension (1024), RRF k=60, dense/sparse top-k, reranker toggle |
+
+---
+
+## 📋 Implementation Status
+
+| Stage | Component | Status |
+|-------|-----------|--------|
+| 1 | PDF Extraction (PyMuPDF) | ✅ Complete |
+| 2 | Document Quality Check | ✅ Complete + Tests |
+| 3 | OCR Fallback (Tesseract 5) | ✅ Complete + Tests |
+| 4 | Unicode Normalization & Cleaning | ✅ Complete |
+| 5 | Legal Section Chunking | ✅ Complete + Tests |
+| 6 | BGE-M3 Embedding (CUDA fp16) | ✅ Complete + Tests |
+| 7 | FAISS Dense + Sparse Lexical Indexing | ✅ Complete + Tests |
+| 8 | Hybrid Retrieval (RRF Fusion) | ✅ Complete + Tests |
+| 9 | Cross-Encoder Reranker | 🟡 Code-complete, disabled (VRAM) |
+| 10 | LLM Generation + Guardrails | 🔴 Placeholder |
+| — | FastAPI Service | 🔴 Placeholder |
+| — | Evaluation Metrics | 🔴 Placeholder |
+| — | Fine-tuning (LoRA) | 🔴 Placeholder |

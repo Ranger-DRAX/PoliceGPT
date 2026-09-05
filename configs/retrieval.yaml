@@ -1,2 +1,17 @@
-# Retrieval configuration placeholder
-# Retrieval logic is decoupled from this repository (repository is scoped exclusively to Document Chunking).
+# Hybrid Indexing & Retrieval Configuration (PoliceGPT)
+# Combines FAISS Dense Cosine Search with Sparse Lexical Inverted Search via Reciprocal Rank Fusion (RRF)
+
+indexing:
+  faiss_index_type: "flat_ip"     # Exact Cosine / Inner Product (100% recall)
+  dimension: 1024                 # BGE-M3 dense vector dimensionality
+  paths:
+    embeddings_dir: "data/processed/embeddings"
+    index_dir: "data/processed/indexes"
+
+retrieval:
+  top_k: 5                        # Number of final chunks returned to the caller
+  dense_top_k: 20                 # Top candidates retrieved from FAISS dense vector search
+  sparse_top_k: 20                # Top candidates retrieved from sparse lexical search
+  rrf_k: 60                       # Reciprocal Rank Fusion smoothing constant
+  use_reranker: false             # Optional cross-encoder reranker (false by default to save VRAM)
+  reranker_model: "BAAI/bge-reranker-base"

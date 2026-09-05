@@ -1,4 +1,12 @@
 """
-Indexing package placeholder.
-Vector indexing is decoupled from this repository (repository is scoped exclusively to Document Chunking).
+PoliceGPT Indexing Layer.
+Dense FAISS Index + Sparse Inverted Index for Hybrid Retrieval.
 """
+
+from .faiss_index import FAISSVectorIndex
+from .sparse_index import SparseLexicalIndex
+
+__all__ = [
+    "FAISSVectorIndex",
+    "SparseLexicalIndex",
+]
