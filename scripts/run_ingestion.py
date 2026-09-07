@@ -169,7 +169,7 @@ def run_pipeline(
 
             if quality.needs_ocr:
                 try:
-                    pix = page.get_pixmap(dpi=200)
+                    pix = page.get_pixmap(dpi=ocr_engine.dpi)
                     img_bytes = pix.tobytes("png")
                     ocr_text = ocr_engine.ocr_image_or_page(img_bytes)
                     if ocr_text.strip():
