@@ -307,10 +307,36 @@ pytest tests/test_embedding.py -v       # BGE-M3 embedder (mocked)
 pytest tests/test_indexing.py -v        # FAISS + Sparse + Hybrid RRF (5 tests)
 pytest tests/test_retrieval.py -v       # Retrieval hardening & IR metrics (12 tests)
 pytest tests/test_rerank.py -v          # Cross-encoder reranker + VRAM guard (8 tests)
-pytest tests/test_guardrails.py -v      # Context assembly, evidence, citations, claims (12 tests)
+pytest tests/test_guardrails.py -v      # Context assembly, evidence, citations, claims (14 tests)
+pytest tests/test_api.py -v             # FastAPI REST service & endpoints (9 tests)
 ```
 
 All tests run without GPU or network access (models are mocked).
+
+---
+
+## 🌐 FastAPI REST Service
+
+Start the production RESTful API server:
+
+```bash
+# Launch server with default settings (http://localhost:8000)
+python scripts/run_api.py
+
+# Launch with hot-reloading on a specific port
+python scripts/run_api.py --port 8000 --reload
+```
+
+Interactive API documentation:
+- **Swagger UI:** [http://localhost:8000/docs](http://localhost:8000/docs)
+- **ReDoc:** [http://localhost:8000/redoc](http://localhost:8000/redoc)
+- **Health Diagnostics:** [http://localhost:8000/api/v1/health](http://localhost:8000/api/v1/health)
+
+### Core Endpoints:
+- `POST /api/v1/query`: Full legal RAG question answering (Gemini generation + statutory citations + claim guardrails).
+- `POST /api/v1/search`: Pure hybrid statutory retrieval (Dense FAISS + Sparse Inverted Index + RRF).
+- `GET /api/v1/chunks/{chunk_id}`: Statutory chunk inspection and legal metadata lookup.
+- `GET /api/v1/health`: Subsystem readiness, index vector counts, and reranker status.
 
 ---
 
@@ -355,8 +381,9 @@ python scripts/benchmark_retrieval.py --live --index-dir data/processed/indexes
 | 8.5   | Retrieval Validation & Hardening      | ✅ Complete + Tests                         |
 | 9     | Cross-Encoder Reranker & Benchmarking | ✅ Complete + Tests (VRAM/CUDA Gated)       |
 | 10    | LLM Generation + Guardrails (Gemini)  | ✅ Complete + Tests                         |
-| —     | FastAPI Service                       | 🔴 Placeholder                              |
+| —     | FastAPI Service                       | ✅ Complete + Tests                         |
 | —     | Evaluation Metrics                    | ✅ Complete (`retrieval_metrics.py`)        |
 | —     | Fine-tuning (LoRA)                    | 🔴 Placeholder                              |
+
 
 
