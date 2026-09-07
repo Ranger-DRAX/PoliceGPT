@@ -13,5 +13,5 @@ retrieval:
   dense_top_k: 20                 # Top candidates retrieved from FAISS dense vector search
   sparse_top_k: 20                # Top candidates retrieved from sparse lexical search
   rrf_k: 60                       # Reciprocal Rank Fusion smoothing constant
-  use_reranker: false             # Optional cross-encoder reranker (false by default to save VRAM)
+  use_reranker: true              # Cross-encoder reranker (BGE-reranker-base)
   reranker_model: "BAAI/bge-reranker-base"
