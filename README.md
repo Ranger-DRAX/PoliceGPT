@@ -307,6 +307,7 @@ pytest tests/test_embedding.py -v       # BGE-M3 embedder (mocked)
 pytest tests/test_indexing.py -v        # FAISS + Sparse + Hybrid RRF (5 tests)
 pytest tests/test_retrieval.py -v       # Retrieval hardening & IR metrics (12 tests)
 pytest tests/test_rerank.py -v          # Cross-encoder reranker + VRAM guard (8 tests)
+pytest tests/test_guardrails.py -v      # Context assembly, evidence, citations, claims (12 tests)
 ```
 
 All tests run without GPU or network access (models are mocked).
@@ -335,6 +336,7 @@ python scripts/benchmark_retrieval.py --live --index-dir data/processed/indexes
 | [`configs/chunking.yaml`](configs/chunking.yaml) | Target chunk size (512), overlap (64), min chunk size, legal regex patterns |
 | [`configs/embedding.yaml`](configs/embedding.yaml) | BGE-M3 model, batch size (4), device (cuda/cpu), fp16, max_length, return_dense/sparse |
 | [`configs/retrieval.yaml`](configs/retrieval.yaml) | FAISS dimension (1024), RRF k=60, dense/sparse top-k, reranker toggle, auto-disable on no-CUDA, min VRAM threshold |
+| [`configs/generation.yaml`](configs/generation.yaml) | Gemini model, temperature (0.1), context budget (12000 chars), evidence floors, support threshold |
 
 ---
 
@@ -352,8 +354,9 @@ python scripts/benchmark_retrieval.py --live --index-dir data/processed/indexes
 | 8     | Hybrid Retrieval (RRF Fusion)         | ✅ Complete + Tests                         |
 | 8.5   | Retrieval Validation & Hardening      | ✅ Complete + Tests                         |
 | 9     | Cross-Encoder Reranker & Benchmarking | ✅ Complete + Tests (VRAM/CUDA Gated)       |
-| 10    | LLM Generation + Guardrails           | 🔴 Placeholder                              |
+| 10    | LLM Generation + Guardrails (Gemini)  | ✅ Complete + Tests                         |
 | —     | FastAPI Service                       | 🔴 Placeholder                              |
 | —     | Evaluation Metrics                    | ✅ Complete (`retrieval_metrics.py`)        |
 | —     | Fine-tuning (LoRA)                    | 🔴 Placeholder                              |
+
 
