@@ -11,6 +11,11 @@ import time
 from pydantic import BaseModel, Field
 from loguru import logger
 import httpx
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
 
 
 class LLMResponse(BaseModel):
