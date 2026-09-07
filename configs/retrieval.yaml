@@ -1,5 +1,6 @@
 # Hybrid Indexing & Retrieval Configuration (PoliceGPT)
 # Combines FAISS Dense Cosine Search with Sparse Lexical Inverted Search via Reciprocal Rank Fusion (RRF)
+# Tuned for low-resource deployment (GTX 1050 Ti 4GB / Intel i3 6th Gen / 8GB RAM)
 
 indexing:
   faiss_index_type: "flat_ip"     # Exact Cosine / Inner Product (100% recall)
@@ -15,3 +16,8 @@ retrieval:
   rrf_k: 60                       # Reciprocal Rank Fusion smoothing constant
   use_reranker: true              # Cross-encoder reranker (BGE-reranker-base)
   reranker_model: "BAAI/bge-reranker-base"
+  reranker_device: "auto"         # "auto", "cuda", or "cpu"
+  auto_disable_if_no_cuda: true   # Auto-disable if CUDA is absent to prevent CPU latency freeze
+  reranker_min_vram_mb: 1200      # Require >= 1.2GB free VRAM before loading on CUDA (avoids OOM)
+  reranker_batch_size: 8          # Micro-batch size to keep peak VRAM spikes under card limits
+  reranker_max_length: 512        # Token length truncation guard

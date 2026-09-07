@@ -2,11 +2,12 @@
 """
 PoliceGPT - Interactive Hybrid Legal Search CLI
 ================================================
-Query Bangladesh legal statutes using Hybrid (FAISS Dense + Sparse Lexical RRF) search.
+Query Bangladesh legal statutes using Hybrid (FAISS Dense + Sparse Lexical RRF) search,
+with optional Cross-Encoder precision reranking and latency telemetry.
 
 Usage:
     python scripts/search_cli.py --query "চুরির শাস্তি কি?"
-    python scripts/search_cli.py --query "police powers to arrest without warrant"
+    python scripts/search_cli.py --query "police powers to arrest without warrant" --no-reranker
     python scripts/search_cli.py --interactive
 """
 
@@ -81,10 +82,23 @@ def parse_args():
         default="configs/retrieval.yaml",
         help="Path to retrieval configuration file.",
     )
+    parser.add_argument(
+        "--reranker",
+        dest="use_reranker",
+        action="store_true",
+        default=None,
+        help="Force enable cross-encoder reranker.",
+    )
+    parser.add_argument(
+        "--no-reranker",
+        dest="use_reranker",
+        action="store_false",
+        help="Disable cross-encoder reranker (pure RRF mode).",
+    )
     return parser.parse_args()
 
 
-def display_results(query: str, results: list, elapsed_sec: float):
+def display_results(query: str, results: list, elapsed_sec: float, profile: dict = None):
     console.print(Rule(f"[bold green]Query: \"{query}\"[/bold green] [dim]({len(results)} matches in {elapsed_sec*1000:.1f}ms)[/dim]"))
 
     if not results:
@@ -98,9 +112,13 @@ def display_results(query: str, results: list, elapsed_sec: float):
 
         header_text = f"[bold cyan]#{idx} | {doc_label}[/bold cyan] [bold yellow]({sec_label}{title_label})[/bold yellow]"
 
+        rerank_badge = ""
+        if res.rerank_score is not None:
+            rerank_badge = f" | [dim]Rerank Score:[/dim] [bold magenta]{res.rerank_score:.4f}[/bold magenta]"
+
         score_details = (
-            f"[dim]RRF Score:[/dim] [bold green]{res.rrf_score:.5f}[/bold green] | "
-            f"[dim]Dense Cosine:[/dim] {res.dense_score:.4f} (Rank #{res.dense_rank}) | "
+            f"[dim]RRF Score:[/dim] [bold green]{res.rrf_score:.5f}[/bold green]{rerank_badge} | "
+            f"[dim]Dense Cosine:[/dim] {res.dense_score:.4f} (Rank #{res.dense_rank or '—'}) | "
             f"[dim]Sparse Lexical:[/dim] {res.sparse_score or 0:.2f} (Rank #{res.sparse_rank or '—'})"
         )
 
@@ -120,7 +138,17 @@ def display_results(query: str, results: list, elapsed_sec: float):
             box=box.ROUNDED,
         ))
 
-    console.print()
+    if profile:
+        console.print(
+            f"[dim]Latency Breakdown: Encode: {profile.get('t_encode_ms', 0)}ms | "
+            f"FAISS: {profile.get('t_dense_ms', 0)}ms | "
+            f"Sparse: {profile.get('t_sparse_ms', 0)}ms | "
+            f"RRF: {profile.get('t_rrf_ms', 0)}ms | "
+            f"Rerank: {profile.get('t_rerank_ms', 0)}ms | "
+            f"Total: {profile.get('t_total_ms', 0)}ms[/dim]\n"
+        )
+    else:
+        console.print()
 
 
 def run_search_session(retriever: HybridRetriever, top_k: int):
@@ -138,7 +166,7 @@ def run_search_session(retriever: HybridRetriever, top_k: int):
             results = retriever.retrieve(query, top_k=top_k)
             t_elapsed = time.perf_counter() - t0
 
-            display_results(query, results, t_elapsed)
+            display_results(query, results, t_elapsed, retriever.last_profile)
         except (KeyboardInterrupt, EOFError):
             console.print("\n[dim]Search terminated.[/dim]")
             break
@@ -149,7 +177,7 @@ def main():
 
     console.print(Panel.fit(
         "[bold cyan]PoliceGPT[/bold cyan] - Hybrid Legal Retrieval CLI\n"
-        "[dim]Dense FAISS (BGE-M3 Cosine) + Sparse Lexical Inverted Index (RRF Fusion)[/dim]",
+        "[dim]Dense FAISS (BGE-M3 Cosine) + Sparse Lexical Inverted Index (RRF Fusion) + BGE Reranker[/dim]",
         border_style="cyan",
     ))
 
@@ -166,17 +194,32 @@ def main():
     t_load = time.perf_counter()
 
     retriever = HybridRetriever(config_path=REPO_ROOT / args.config)
+    if args.use_reranker is not None:
+        retriever.use_reranker = args.use_reranker
+
     retriever.load_indexes(index_dir)
+
+    reranker_status = "Disabled"
+    if retriever.use_reranker and retriever.reranker:
+        st = retriever.reranker.get_status()
+        if st.get("is_enabled"):
+            reranker_status = f"[bold green]Active ({st.get('device')})[/bold green]"
+        else:
+            reranker_status = f"[bold yellow]Auto-Disabled (No CUDA / Low VRAM)[/bold yellow]"
+    else:
+        reranker_status = "[dim]Disabled[/dim]"
+
     console.print(
         f"[green]✓[/green] Loaded [bold]{retriever.dense_index.total_vectors}[/bold] legal chunks "
-        f"across [bold]{len(retriever.sparse_index.inverted_index)}[/bold] lexical terms in {time.perf_counter() - t_load:.2f}s.\n"
+        f"across [bold]{len(retriever.sparse_index.inverted_index)}[/bold] lexical terms in {time.perf_counter() - t_load:.2f}s | "
+        f"Reranker: {reranker_status}\n"
     )
 
     if args.query:
         t0 = time.perf_counter()
         results = retriever.retrieve(args.query, top_k=args.top_k)
         t_elapsed = time.perf_counter() - t0
-        display_results(args.query, results, t_elapsed)
+        display_results(args.query, results, t_elapsed, retriever.last_profile)
     else:
         run_search_session(retriever, top_k=args.top_k)
 

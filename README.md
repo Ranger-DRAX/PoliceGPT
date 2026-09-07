@@ -305,9 +305,25 @@ pytest tests/test_quality_check.py -v   # Quality checker (3 tests)
 pytest tests/test_ocr_fallback.py -v    # Tesseract 5 OCR (6 tests)
 pytest tests/test_embedding.py -v       # BGE-M3 embedder (mocked)
 pytest tests/test_indexing.py -v        # FAISS + Sparse + Hybrid RRF (5 tests)
+pytest tests/test_retrieval.py -v       # Retrieval hardening & IR metrics (12 tests)
+pytest tests/test_rerank.py -v          # Cross-encoder reranker + VRAM guard (8 tests)
 ```
 
 All tests run without GPU or network access (models are mocked).
+
+---
+
+## 📊 Benchmarking
+
+Run the automated retrieval and reranker benchmarking suite:
+
+```bash
+# Fast validation / CI mode (synthetic mock models)
+python scripts/benchmark_retrieval.py --synthetic
+
+# Live benchmark on compiled indexes
+python scripts/benchmark_retrieval.py --live --index-dir data/processed/indexes
+```
 
 ---
 
@@ -318,24 +334,26 @@ All tests run without GPU or network access (models are mocked).
 | [`configs/ingestion.yaml`](configs/ingestion.yaml) | PDF parser, quality thresholds, Tesseract 5 OCR settings (DPI, PSM, OEM, binary path) |
 | [`configs/chunking.yaml`](configs/chunking.yaml) | Target chunk size (512), overlap (64), min chunk size, legal regex patterns |
 | [`configs/embedding.yaml`](configs/embedding.yaml) | BGE-M3 model, batch size (4), device (cuda/cpu), fp16, max_length, return_dense/sparse |
-| [`configs/retrieval.yaml`](configs/retrieval.yaml) | FAISS dimension (1024), RRF k=60, dense/sparse top-k, reranker toggle |
+| [`configs/retrieval.yaml`](configs/retrieval.yaml) | FAISS dimension (1024), RRF k=60, dense/sparse top-k, reranker toggle, auto-disable on no-CUDA, min VRAM threshold |
 
 ---
 
 ## 📋 Implementation Status
 
-| Stage | Component | Status |
-|-------|-----------|--------|
-| 1 | PDF Extraction (PyMuPDF) | ✅ Complete |
-| 2 | Document Quality Check | ✅ Complete + Tests |
-| 3 | OCR Fallback (Tesseract 5) | ✅ Complete + Tests |
-| 4 | Unicode Normalization & Cleaning | ✅ Complete |
-| 5 | Legal Section Chunking | ✅ Complete + Tests |
-| 6 | BGE-M3 Embedding (CUDA fp16) | ✅ Complete + Tests |
-| 7 | FAISS Dense + Sparse Lexical Indexing | ✅ Complete + Tests |
-| 8 | Hybrid Retrieval (RRF Fusion) | ✅ Complete + Tests |
-| 9 | Cross-Encoder Reranker | 🟡 Code-complete, disabled (VRAM) |
-| 10 | LLM Generation + Guardrails | 🔴 Placeholder |
-| — | FastAPI Service | 🔴 Placeholder |
-| — | Evaluation Metrics | 🔴 Placeholder |
-| — | Fine-tuning (LoRA) | 🔴 Placeholder |
+| Stage | Component                             | Status                                      |
+|-------|---------------------------------------|---------------------------------------------|
+| 1     | PDF Extraction (PyMuPDF)              | ✅ Complete                                  |
+| 2     | Document Quality Check                | ✅ Complete + Tests                         |
+| 3     | OCR Fallback (Tesseract 5)            | ✅ Complete + Tests                         |
+| 4     | Unicode Normalization & Cleaning      | ✅ Complete                                  |
+| 5     | Legal Section Chunking                | ✅ Complete + Tests                         |
+| 6     | BGE-M3 Embedding (CUDA fp16)          | ✅ Complete + Tests                         |
+| 7     | FAISS Dense + Sparse Lexical Indexing | ✅ Complete + Tests                         |
+| 8     | Hybrid Retrieval (RRF Fusion)         | ✅ Complete + Tests                         |
+| 8.5   | Retrieval Validation & Hardening      | ✅ Complete + Tests                         |
+| 9     | Cross-Encoder Reranker & Benchmarking | ✅ Complete + Tests (VRAM/CUDA Gated)       |
+| 10    | LLM Generation + Guardrails           | 🔴 Placeholder                              |
+| —     | FastAPI Service                       | 🔴 Placeholder                              |
+| —     | Evaluation Metrics                    | ✅ Complete (`retrieval_metrics.py`)        |
+| —     | Fine-tuning (LoRA)                    | 🔴 Placeholder                              |
+
