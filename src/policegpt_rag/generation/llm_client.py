@@ -46,7 +46,7 @@ class BaseLLMClient(ABC):
 
 class GeminiClient(BaseLLMClient):
     """
-    Production client for Google Gemini (gemini-2.5-flash, gemini-1.5-flash, etc.).
+    Production client for Google Gemini (gemini-3.5-flash, etc.).
     Uses direct REST API via HTTPX with exponential backoff on HTTP 429 / 503.
     Requires GEMINI_API_KEY or GOOGLE_API_KEY in environment or constructor.
     """
@@ -56,7 +56,7 @@ class GeminiClient(BaseLLMClient):
     def __init__(
         self,
         api_key: Optional[str] = None,
-        model_name: str = "gemini-3.6-flash",
+        model_name: str = "gemini-3.5-flash",
         timeout_sec: float = 30.0,
         max_retries: int = 3,
     ):
@@ -173,7 +173,7 @@ class MockLLMClient(BaseLLMClient):
     def __init__(
         self,
         default_response: Optional[str] = None,
-        model_name: str = "mock-gemini-flash",
+        model_name: str = "mock-gemini-3.5-flash",
     ):
         self.default_response = default_response
         self.model_name = model_name

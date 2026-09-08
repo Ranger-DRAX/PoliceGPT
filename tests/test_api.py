@@ -89,7 +89,7 @@ def mock_retriever():
 def mock_generator():
     """Mock LegalGenerator returning structured LegalAnswerResponse."""
     generator = MagicMock()
-    generator.llm_client.model_name = "mock-gemini-flash"
+    generator.llm_client.model_name = "mock-gemini-3.5-flash"
 
     def _generate(query, retrieved_chunks):
         if query == "আইন":
@@ -99,7 +99,7 @@ def mock_generator():
                 answer="আপনার প্রশ্নটি অত্যন্ত সংক্ষিপ্ত বা অস্পষ্ট।",
                 clarification_prompt="অনুগ্রহ করে বিস্তারিত লিখুন।",
                 latency_ms=5.0,
-                model_name="mock-gemini-flash",
+                model_name="mock-gemini-3.5-flash",
             )
         return LegalAnswerResponse(
             query=query,
@@ -118,7 +118,7 @@ def mock_generator():
             is_grounded=True,
             claim_support_score=0.85,
             latency_ms=25.0,
-            model_name="mock-gemini-flash",
+            model_name="mock-gemini-3.5-flash",
         )
 
     generator.generate_answer.side_effect = _generate

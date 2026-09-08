@@ -1,8 +1,8 @@
 # PoliceGPT — LLM Generation & Legal Guardrails Configuration
-# Tuned for grounded statutory question answering with Google Gemini
+# Tuned for grounded statutory question answering with Google Gemini 3.5 Flash
 
 generation:
-  model_name: "gemini-2.5-flash"       # Google Gemini model (e.g. gemini-2.5-flash, gemini-1.5-flash)
+  model_name: "gemini-3.5-flash"       # Google Gemini model (gemini-3.5-flash)
   temperature: 0.1                     # Low temperature for deterministic, factual statutory responses
   max_output_tokens: 2048              # Maximum response token length
   context_budget_chars: 12000          # Maximum character budget for assembled context (~3000-4000 tokens)

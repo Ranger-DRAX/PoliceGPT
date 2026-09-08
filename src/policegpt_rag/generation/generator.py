@@ -55,7 +55,7 @@ class LegalAnswerResponse(BaseModel):
     claim_support_score: float = 1.0
     clarification_prompt: Optional[str] = None
     latency_ms: float = 0.0
-    model_name: str = "gemini-2.5-flash"
+    model_name: str = "gemini-3.5-flash"
     validation_notes: List[str] = Field(default_factory=list)
 
 
@@ -65,7 +65,7 @@ class LegalGenerator:
       1. Context Assembly (Deduplication & [S1], [S2] source ID assignment)
       2. Evidence Check (Relevance floor & ambiguity check)
       3. Prompt Building (Bengali statutory templates)
-      4. LLM Call (Gemini client with retry backoff)
+      4. LLM Call (Gemini 3.5 Flash client with retry backoff)
       5. Citation Validation (Verifying source IDs against context)
       6. Answer Validation (Claim support & hallucinated section checks)
       7. Packaging structured API response
@@ -75,10 +75,12 @@ class LegalGenerator:
         self,
         llm_client: Optional[BaseLLMClient] = None,
         config_path: Optional[Union[str, Path]] = None,
+        model_name: str = "gemini-3.5-flash",
         max_context_chars: int = 12000,
         temperature: float = 0.1,
         max_output_tokens: int = 2048,
     ):
+        self.model_name = model_name
         self.temperature = temperature
         self.max_output_tokens = max_output_tokens
         self.max_context_chars = max_context_chars
@@ -97,10 +99,10 @@ class LegalGenerator:
         else:
             # Default to GeminiClient if API key present, otherwise MockLLMClient
             try:
-                self.llm_client = GeminiClient()
+                self.llm_client = GeminiClient(model_name=self.model_name)
             except ValueError:
                 logger.warning("No Gemini API key detected. Initializing with MockLLMClient for offline use.")
-                self.llm_client = MockLLMClient()
+                self.llm_client = MockLLMClient(model_name=self.model_name)
 
     def _load_config(self, config_path: Union[str, Path]):
         path = Path(config_path)
@@ -108,6 +110,7 @@ class LegalGenerator:
             with open(path, "r", encoding="utf-8") as f:
                 cfg = yaml.safe_load(f) or {}
             gen_cfg = cfg.get("generation", {})
+            self.model_name = gen_cfg.get("model_name", self.model_name)
             self.temperature = gen_cfg.get("temperature", self.temperature)
             self.max_output_tokens = gen_cfg.get("max_output_tokens", self.max_output_tokens)
             self.max_context_chars = gen_cfg.get("context_budget_chars", self.max_context_chars)

@@ -81,8 +81,9 @@ A specialized multilingual (Bengali & English) legal document processing and ret
                                │
                                ▼
 ┌─────────────────────────────────────────────────────────────┐
-│ 10. LLM Generation + Legal Guardrails  [NOT IMPLEMENTED]    │
-│     • LLM Client, Prompt Templates, Citation Guardrails     │
+│ 10. LLM Generation + Legal Guardrails (Gemini 3.5 Flash)    │
+│     • Gemini 3.5 Flash Client, Bengali Prompt Templates     │
+│     • Evidence Pre-Flight, Citation & Claim Guardrails      │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -102,7 +103,7 @@ Police-GPT/
 │   ├── chunking.yaml               # Target chunk size, overlap, legal regex patterns
 │   ├── embedding.yaml              # BGE-M3 model, batch size, CUDA/CPU, fp16
 │   ├── retrieval.yaml              # FAISS + Sparse hybrid, RRF k=60, reranker toggle
-│   └── generation.yaml             # Placeholder
+│   └── generation.yaml             # Gemini 3.5 Flash model, temperature, guardrails
 │
 ├── data/
 │   ├── Police_Law/                 # Source statutes (Police Act 1861, PRB 1943, Penal Code 1860)
@@ -135,10 +136,12 @@ Police-GPT/
 │   │   ├── hybrid_search.py        # HybridRetriever — Dense + Sparse + RRF fusion
 │   │   └── rerank.py               # BGEReranker — cross-encoder (lazy-loaded, optional)
 │   │
-│   ├── generation/                 # ⚠️ Placeholders — not yet implemented
-│   │   ├── llm_client.py
-│   │   ├── prompt_templates.py
-│   │   └── guardrails.py
+│   ├── generation/                 # Stage 10: Grounded Statutory LLM Generation
+│   │   ├── llm_client.py           # Gemini 3.5 Flash REST client + MockLLMClient
+│   │   ├── context_builder.py      # ContextAssembler (budget packing, [S1]/[S2] tags)
+│   │   ├── prompt_templates.py     # Bengali statutory prompt builder & templates
+│   │   ├── guardrails.py           # Pre-flight evidence, citations & claim guardrails
+│   │   └── generator.py            # LegalGenerator end-to-end orchestrator
 │   │
 │   ├── evaluation/                 # ⚠️ Placeholders — not yet implemented
 │   │   ├── retrieval_metrics.py
@@ -159,7 +162,7 @@ Police-GPT/
 │   ├── test_embedding.py           # BGE-M3 embedder tests (mocked, 5+ tests)
 │   └── test_indexing.py            # FAISS + Sparse + Hybrid RRF tests (5 tests)
 │
-├── api/                            # ⚠️ Placeholder — not yet implemented
+├── api/                            # Production FastAPI REST Service (/query, /search, /health)
 ├── finetuning/                     # ⚠️ Placeholder — not yet implemented
 └── venv/
 ```
@@ -284,12 +287,14 @@ python scripts/search_cli.py --query "ধারা ৩৭৮" --top-k 10
 - **`hybrid_search.py`** — `HybridRetriever` runs parallel dense FAISS search + sparse inverted index search. Applies Reciprocal Rank Fusion: `RRF(d) = Σ 1/(60 + rank_m(d))`. Returns `RetrievedChunk` pydantic objects with section citations, act names, text content, and score breakdowns.
 - **`rerank.py`** — `BGEReranker` using `BAAI/bge-reranker-base`. Lazy-loaded, disabled by default (`use_reranker: false` in `retrieval.yaml`) to conserve VRAM on the GTX 1050 Ti. Enable by setting `use_reranker: true`.
 
-### Generation & Guardrails (`generation/`) — ⚠️ Not Yet Implemented
+### Generation & Guardrails (`generation/`) — Stage 10
 
-Placeholder stubs for the final RAG generation stage:
-- `llm_client.py` — LLM API client
-- `prompt_templates.py` — Bengali/English legal RAG prompt builder
-- `guardrails.py` — Legal citation enforcement and hallucination guardrails
+Production grounded statutory generation powered by **Google Gemini 3.5 Flash** with multi-tier legal guardrails:
+- **`llm_client.py`** — `GeminiClient` implementing `BaseLLMClient` with exponential backoff on HTTP 429 / 503 retries for `gemini-3.5-flash`. Includes `MockLLMClient` for reproducible offline testing.
+- **`context_builder.py`** — `ContextAssembler` assigns `[S1]`, `[S2]` source identifiers, deduplicates sections, and packs statutory text within a character budget (default 12,000 chars).
+- **`prompt_templates.py`** — Bengali legal system instructions and statutory injection prompt enforcing mandatory citation tags and refusal on insufficient evidence.
+- **`guardrails.py`** — Pre-flight `EvidenceChecker` (relevance score floors, ambiguous query detection), `CitationValidator` (resolves citations to statutory metadata), and `AnswerValidator` (lexical claim support & hallucination prevention).
+- **`generator.py`** — `LegalGenerator` orchestrates the complete generation pipeline and returns structured `LegalAnswerResponse` models.
 
 ---
 
@@ -333,7 +338,7 @@ Interactive API documentation:
 - **Health Diagnostics:** [http://localhost:8000/api/v1/health](http://localhost:8000/api/v1/health)
 
 ### Core Endpoints:
-- `POST /api/v1/query`: Full legal RAG question answering (Gemini generation + statutory citations + claim guardrails).
+- `POST /api/v1/query`: Full legal RAG question answering (Gemini 3.5 Flash generation + statutory citations + claim guardrails).
 - `POST /api/v1/search`: Pure hybrid statutory retrieval (Dense FAISS + Sparse Inverted Index + RRF).
 - `GET /api/v1/chunks/{chunk_id}`: Statutory chunk inspection and legal metadata lookup.
 - `GET /api/v1/health`: Subsystem readiness, index vector counts, and reranker status.
@@ -362,7 +367,7 @@ python scripts/benchmark_retrieval.py --live --index-dir data/processed/indexes
 | [`configs/chunking.yaml`](configs/chunking.yaml) | Target chunk size (512), overlap (64), min chunk size, legal regex patterns |
 | [`configs/embedding.yaml`](configs/embedding.yaml) | BGE-M3 model, batch size (4), device (cuda/cpu), fp16, max_length, return_dense/sparse |
 | [`configs/retrieval.yaml`](configs/retrieval.yaml) | FAISS dimension (1024), RRF k=60, dense/sparse top-k, reranker toggle, auto-disable on no-CUDA, min VRAM threshold |
-| [`configs/generation.yaml`](configs/generation.yaml) | Gemini model, temperature (0.1), context budget (12000 chars), evidence floors, support threshold |
+| [`configs/generation.yaml`](configs/generation.yaml) | Gemini 3.5 Flash model (`gemini-3.5-flash`), temperature (0.1), context budget (12000 chars), evidence floors, support threshold |
 
 ---
 
@@ -380,7 +385,7 @@ python scripts/benchmark_retrieval.py --live --index-dir data/processed/indexes
 | 8     | Hybrid Retrieval (RRF Fusion)         | ✅ Complete + Tests                         |
 | 8.5   | Retrieval Validation & Hardening      | ✅ Complete + Tests                         |
 | 9     | Cross-Encoder Reranker & Benchmarking | ✅ Complete + Tests (VRAM/CUDA Gated)       |
-| 10    | LLM Generation + Guardrails (Gemini)  | ✅ Complete + Tests                         |
+| 10    | LLM Generation + Guardrails (Gemini 3.5 Flash)  | ✅ Complete + Tests                         |
 | —     | FastAPI Service                       | ✅ Complete + Tests                         |
 | —     | Evaluation Metrics                    | ✅ Complete (`retrieval_metrics.py`)        |
 | —     | Fine-tuning (LoRA)                    | 🔴 Placeholder                              |

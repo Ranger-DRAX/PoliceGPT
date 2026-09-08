@@ -76,7 +76,7 @@ def main():
         f"[green]• Swagger Docs:[/green] http://localhost:{args.port}/docs\n"
         f"[green]• ReDoc:[/green] http://localhost:{args.port}/redoc\n"
         f"[green]• Health Check:[/green] http://localhost:{args.port}/api/v1/health\n"
-        f"[dim]Dense FAISS (BGE-M3) + Sparse RRF + Google Gemini Flash + Legal Guardrails[/dim]",
+        f"[dim]Dense FAISS (BGE-M3) + Sparse RRF + Google Gemini 3.5 Flash + Legal Guardrails[/dim]",
         border_style="cyan",
     ))
 

@@ -1,6 +1,6 @@
 """
 PoliceGPT Generation & Legal Guardrails Package.
-Provides context assembly, evidence checking, Gemini LLM generation,
+Provides context assembly, evidence checking, Gemini 3.5 Flash LLM generation,
 citation validation, and claim verification.
 """
 

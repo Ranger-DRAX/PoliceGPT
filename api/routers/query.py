@@ -38,7 +38,7 @@ router = APIRouter(prefix="/api/v1", tags=["Legal Services"])
     description=(
         "Executes the full PoliceGPT RAG pipeline: retrieves relevant statutory provisions "
         "using Dense FAISS + Sparse Lexical RRF search, performs pre-flight evidence checking, "
-        "generates a grounded Bengali answer using Google Gemini, and validates citations & claims."
+        "generates a grounded Bengali answer using Google Gemini 3.5 Flash, and validates citations & claims."
     ),
 )
 async def legal_query(

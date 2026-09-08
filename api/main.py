@@ -143,7 +143,7 @@ def create_app() -> FastAPI:
         description=(
             "Statutory Legal Question Answering and Retrieval API for Bangladesh Law Enforcement. "
             "Combines Dense FAISS (BGE-M3) + Sparse Lexical Inverted Index (RRF Fusion), "
-            "Google Gemini (gemini-2.5-flash), and statutory citation guardrails."
+            "Google Gemini (gemini-3.5-flash), and statutory citation guardrails."
         ),
         version="1.0.0",
         docs_url="/docs",
